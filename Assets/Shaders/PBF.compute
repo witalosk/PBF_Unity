@@ -1,0 +1,355 @@
+#pragma kernel Update
+#pragma kernel ComputeDensity
+#pragma kernel ComputeExternalForces
+#pragma kernel Integrate
+#pragma kernel ComputeScalingFactor;
+#pragma kernel ComputePositionCorrection;
+#pragma kernel PositionCorrection;
+#pragma kernel ComputeDensityFluctuation;
+#pragma kernel UpdateVelocity
+
+#include "GPUTrails.cginc"
+#include "noise4D.cginc"
+
+
+StructuredBuffer<Particle> _particleReadBuffer;
+RWStructuredBuffer<Particle> _particleWriteBuffer;
+uint _particleNum;
+float _time;
+float _timeScale;
+float _positionScale;
+float _noiseScale;
+float _gatherPower; // 中心に向かって働く力の強度
+float4 _mousePos;
+bool _isCollisionOnlyInIntegrate;	// Integrateカーネルで衝突のみにするかどうか
+
+float4 _spaceMin;
+float4 _spaceMax;
+float4 _gravity;
+float _effectiveRadius;		// 有効半径
+float _mass;				// 質量
+float _viscosity;			// 粘性係数
+float _dt;					// タイムステップ幅
+float _density;				// 初期密度
+float _epsilon;				// 緩和係数
+bool _useArtifactPressure;	// 人工圧力を使うか
+float _ap_k;				// 人工圧力係数
+float _ap_n;				// 人工圧力係数
+float _ap_q;				// 人工圧力係数
+float _ap_wq;
+float _densVar;				// 平均密度変動率
+
+float _wallStiffness;		// 壁係数
+
+
+// カーネル関数係数
+float _wpoly6, _gWpoly6, _lWpoly6;
+float _wspiky, _gWspiky, _lWspiky;
+float _wvisc, _gWvisc, _lWvisc;
+
+[numthreads(256, 1, 1)]
+void Update(uint3 id : SV_DispatchThreadID)
+{
+	uint idx = id.x;
+	if (idx < _particleNum)
+	{
+
+	}
+}
+
+// 密度計算 (全探索版)
+[numthreads(256, 1, 1)]
+void ComputeDensity(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+	
+	// 本来は空間分割法を使った近傍探索を行う, ここでは全探索
+	Particle temp;
+	float dens = 0.0;
+	float3 force = 0.0;
+	float r = 0.0;
+	for (uint i = 0; i < _particleNum; i++) {
+		Particle temp = _particleReadBuffer[i];
+		r = distance(temp.pos, prt.pos);
+		if (r <= _effectiveRadius) {
+			// 密度
+			float q = _effectiveRadius * _effectiveRadius - r * r;
+			dens += _mass * _wpoly6 * q * q * q;
+
+		}
+	}
+
+	prt.dens = dens;
+
+	_particleWriteBuffer[index] = prt;
+}
+
+// 力場計算
+[numthreads(256, 1, 1)]
+void ComputeExternalForces(uint3 id : SV_DispatchThreadId)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+
+	// 粘性項を全探索で計算
+	float3 force = 0.0;
+	float r = 0.0;
+	for (uint i = 0; i < _particleNum; i++) {
+		Particle temp = _particleReadBuffer[i];
+		r = distance(temp.pos, prt.pos);
+		if (r <= _effectiveRadius && r > 0.0001) {
+			float q = _effectiveRadius - r;
+			float3 vij = temp.vel - prt.vel;
+
+			force += _viscosity * _mass * (vij / temp.dens) * _lWvisc * q;
+		}
+	}
+
+	// 重力(外力)
+	force += _gravity.xyz;
+
+	// マウスインタラクション
+	if (_mousePos.x > -1000.0) {
+		force += (_mousePos.xyz - prt.pos) * _gatherPower;
+	}
+
+	prt.force = force;
+
+	_particleWriteBuffer[index] = prt;
+}
+
+// 境界処理
+void ComputeRepulsion(Particle particle, out float3 opos, out float3 ovel)
+{
+	float dist;
+	float3 closestPoint; 	// 最近傍点
+	float closestDist;		// 最近傍点までの距離
+	float3 n;				// 法線
+
+	// X(-)境界
+	closestPoint = float3(_spaceMin.x, particle.pos.yz);
+	closestDist = _spaceMin.x - particle.pos.x;
+	n = float3(1, 0, 0);
+	
+	// X(+)境界
+	dist = particle.pos.x - _spaceMax.x;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(_spaceMax.x, particle.pos.yz);
+		n = float3(-1, 0, 0);
+	}
+
+	// Y(-)境界
+	dist = _spaceMin.y - particle.pos.y;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.x, _spaceMin.y, particle.pos.z);
+		n = float3(0, 1, 0);
+	}
+
+	// Y(+)境界
+	dist = particle.pos.y - _spaceMax.y;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.x, _spaceMax.y, particle.pos.z);
+		n = float3(0, -1, 0);
+	}
+
+	// Z(-)境界
+	dist = _spaceMin.z - particle.pos.z;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.xy, _spaceMin.z);
+		n = float3(0, 0, 1);
+	}
+
+	// Z(+)境界
+	dist = particle.pos.z - _spaceMax.z;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.xy, _spaceMax.z);
+		n = float3(0, 0, -1);
+	}
+
+	if (closestDist > 0.0) {
+		float res = _wallStiffness;
+		res = (res > 0.0) ? (res * abs(closestDist) / (_dt * length(particle.vel))) : 0.0;
+		ovel = particle.vel - (1.0 + res) * n * dot(n, particle.vel);
+		opos = closestPoint;
+	}
+	else {
+		ovel = particle.vel;
+		opos = particle.pos;
+	}
+}
+
+// 予測位置・速度の計算
+[numthreads(256, 1, 1)]
+void Integrate(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+
+	Particle particle = _particleReadBuffer[index];
+
+	if (!_isCollisionOnlyInIntegrate) {
+		particle.prevPos = particle.pos;
+		particle.prevVel = particle.vel;
+	}
+
+	float effectiveRange = 0.0;
+
+	particle.acc = particle.force;
+
+	// 境界条件
+	float3 opos, ovel;
+	ComputeRepulsion(particle, opos, ovel);
+	particle.pos = opos;
+	particle.vel = ovel;
+
+	if (!_isCollisionOnlyInIntegrate) {
+		particle.vel += particle.acc * _dt;
+		particle.pos += (particle.vel * _dt) * _positionScale;
+	}
+
+	_particleWriteBuffer[index] = particle;
+}
+
+// スケーリングファクタλ_iの計算
+[numthreads(256, 1, 1)]
+void ComputeScalingFactor(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+	
+	// 本来は空間分割法を使った近傍探索を行う, ここでは全探索
+	float dens = 0.0;
+	float r = 0.0;
+	for (uint i = 0; i < _particleNum; i++) {
+		Particle temp = _particleReadBuffer[i];
+		r = distance(temp.pos, prt.pos);
+		if (r <= _effectiveRadius) {
+			// 密度
+			float q = _effectiveRadius * _effectiveRadius - r * r;
+			dens += _mass * _wpoly6 * q * q * q;
+
+		}
+	}
+
+	// 密度拘束条件 (条件 : 初期密度から変動がない)
+	float C = dens / _density - 1.0;
+
+	// スケーリングファクタの分母項計算
+	float sd = 0.0;
+	for (uint j = 0; j < _particleNum; j++) {
+		if (j == index) continue;
+
+		Particle temp = _particleReadBuffer[j];
+		r = distance(temp.pos, prt.pos);
+		float3 rij = prt.pos - temp.pos;
+		if (r <= _effectiveRadius && r > 0.0) {
+			float q = _effectiveRadius - r;
+
+			// 位置変動^2を計算
+			float3 deltaPos = (_gWspiky * q * q * rij / r) / _density;
+			sd += dot(deltaPos, deltaPos);
+		}
+	}
+
+	prt.scalingFactor = - C / (sd + _epsilon);
+	prt.dens = dens;
+
+	_particleWriteBuffer[index] = prt;
+}
+
+// 位置修正量の計算
+[numthreads(256, 1, 1)]
+void ComputePositionCorrection(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+	float si = prt.scalingFactor;
+
+	float r = 0.0;
+	float3 dp = 0.0;
+	for (uint j = 0; j < _particleNum; j++) {
+		if (j == index) continue;
+
+		Particle temp = _particleReadBuffer[j];
+		r = distance(temp.pos, prt.pos);
+		float3 rij = prt.pos - temp.pos;
+
+		if (r <= _effectiveRadius && r > 0.0) {
+			float scorr = 0.0f;
+
+			if(_useArtifactPressure) {
+				float q1 = _effectiveRadius * _effectiveRadius - r * r;
+				float ww = _wpoly6 * q1 * q1 * q1 / _ap_wq;
+				scorr = -_ap_k * pow(abs(ww), _ap_n) * _dt * _dt;
+			}
+
+			float q = _effectiveRadius - r;
+			float sj = temp.scalingFactor;
+
+			dp += (si + sj + scorr) * (_gWspiky * q * q * rij / r) / _density;
+		}
+	}
+	
+	prt.deltaPos = dp;
+
+	_particleWriteBuffer[index] = prt;
+}
+
+// 位置修正
+[numthreads(256, 1, 1)]
+void PositionCorrection(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+
+	Particle prt = _particleReadBuffer[index];
+	prt.pos += prt.deltaPos;
+
+	_particleWriteBuffer[index] = prt; // 位置修正
+}
+
+// 密度変動計算
+[numthreads(256, 1, 1)]
+void ComputeDensityFluctuation(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+	
+	float err = prt.dens - _density;
+
+	if (err >= 0.0) {
+		prt.deltaDens = err / _density;
+	}
+	else {
+		prt.deltaDens = 0.0;
+	}
+
+	_particleWriteBuffer[index] = prt;
+}
+
+// 速度の更新
+[numthreads(256, 1, 1)]
+void UpdateVelocity(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleWriteBuffer[index];
+
+	float3 newpos = prt.pos;
+	float3 prevpos = prt.prevPos;
+
+	prt.vel = (newpos - prevpos) / _dt;
+
+	_particleWriteBuffer[index] = prt;
+}

@@ -1,0 +1,92 @@
+#pragma kernel Update
+
+#include "GPUTrails.cginc"
+#include "noise4D.cginc"
+
+float3 snoise3D(float4 x)
+{
+	float s = snoise(x);
+	float s1 = snoise(float4(x.y - 19.1, x.z + 33.4, x.x + 47.2, x.w));
+	float s2 = snoise(float4(x.z + 74.2, x.x - 124.5, x.y + 99.4, x.w));
+	float3 c = float3(s, s1, s2);
+	return c;
+}
+
+float3 curlNoise(float4 p) {
+
+	const float e = 0.0009765625;
+	float4 dx = float4(e, 0.0, 0.0, 0.0);
+	float4 dy = float4(0.0, e, 0.0, 0.0);
+	float4 dz = float4(0.0, 0.0, e, 0.0);
+
+	float3 p_x0 = snoise3D(p - dx);
+	float3 p_x1 = snoise3D(p + dx);
+	float3 p_y0 = snoise3D(p - dy);
+	float3 p_y1 = snoise3D(p + dy);
+	float3 p_z0 = snoise3D(p - dz);
+	float3 p_z1 = snoise3D(p + dz);
+
+	float x = p_y1.z - p_y0.z - p_z1.y + p_z0.y;
+	float y = p_z1.x - p_z0.x - p_x1.z + p_x0.z;
+	float z = p_x1.y - p_x0.y - p_y1.x + p_y0.x;
+
+	const float divisor = 1.0 / (2.0 * e);
+	return normalize(float3(x, y, z) * divisor);
+}
+
+
+RWStructuredBuffer<Particle> _particleWriteBuffer;
+uint _particleNum;
+float _time;
+float _timeScale;
+float _positionScale;
+float _noiseScale;
+float _gatherPower; // 中心に向かって働く力の強度
+float4 _mousePos;
+
+float4 _spaceMin;
+float4 _spaceMax;
+float4 _gravity;
+
+[numthreads(256, 1, 1)]
+void Update(uint3 id : SV_DispatchThreadID)
+{
+	uint idx = id.x;
+	if (idx < _particleNum)
+	{
+		Particle particle = _particleWriteBuffer[idx];
+		float3 curl = curlNoise(float4(particle.pos * _positionScale, _time * _timeScale));
+
+		float3 acc = curl * _noiseScale;
+		acc += _gatherPower * particle.pos * -1.0;
+
+
+
+
+		float effectiveRange = 0.0;
+
+		// 境界条件
+		if (particle.pos.x - _spaceMin.x < effectiveRange || particle.pos.x + _spaceMin.x > effectiveRange)
+		{
+			particle.vel.x = 0.0;
+		} 
+		if (particle.pos.y - _spaceMin.y < effectiveRange || particle.pos.y + _spaceMin.y > effectiveRange)
+		{
+			particle.vel.y = 0.0;
+		}
+		if (particle.pos.z - _spaceMin.z < effectiveRange || particle.pos.z + _spaceMin.z > effectiveRange)
+		{
+			particle.vel.z = 0.0;
+		}
+
+		if (_mousePos.x > -1000.0) {
+			particle.vel += (_mousePos.xyz - particle.pos) * 0.0005;
+		}
+
+		particle.acc = acc + _gravity.xyz;
+		particle.vel += particle.acc * _timeScale;
+		particle.pos += particle.vel * _timeScale;
+
+		_particleWriteBuffer[idx] = particle;
+	}
+}	

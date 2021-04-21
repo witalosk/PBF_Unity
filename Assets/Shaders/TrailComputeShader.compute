@@ -1,0 +1,61 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CalcInput
+
+#include "GPUTrails.cginc"
+
+float _time;
+float _updateDistanceMin;
+uint _particleNum;
+
+RWStructuredBuffer<Trail> _trailBuffer;
+RWStructuredBuffer<Node> _nodeBuffer;
+RWStructuredBuffer<Particle> _particleBuffer;
+
+Node GetNode(int trailIdx, int nodeIdx)
+{
+	return _nodeBuffer[ToNodeBufIdx(trailIdx, nodeIdx)];
+}
+
+void SetNode(Node node, int trailIdx, int nodeIdx)
+{
+	_nodeBuffer[ToNodeBufIdx(trailIdx, nodeIdx)] = node;
+}
+
+[numthreads(256, 1, 1)]
+void CalcInput (uint3 id : SV_DispatchThreadID)
+{
+    uint particleIdx = id.x; // 今見ているパーティクルのIdx
+    
+    if (particleIdx >= _particleNum) return;
+
+    Trail trail = _trailBuffer[particleIdx];
+    Particle particle = _particleBuffer[particleIdx];
+    int currentNodeIdx = trail.currentNodeIdx;
+
+    bool update = true;
+    // 前フレームの位置と比較して差が小さければNodeを追加しない
+    if (trail.currentNodeIdx >= 0)
+    {
+        // 前フレームの位置を取得
+        Node beforeNode = GetNode(particleIdx, currentNodeIdx);
+        float dist = distance(particle.pos, beforeNode.pos);
+        update = dist > _updateDistanceMin;
+    }
+
+    if (update) {
+        Node node;
+        node.time = _time;
+        node.pos = particle.pos;
+
+        // バッファをあふれたIdは先頭にもどす
+        currentNodeIdx++;
+        currentNodeIdx %= _nodeNumPerTrail;
+        
+        // Node / Trail書き込み
+        SetNode(node, particleIdx, currentNodeIdx);
+
+        trail.currentNodeIdx = currentNodeIdx;
+        _trailBuffer[particleIdx] = trail;
+    }
+
+}
