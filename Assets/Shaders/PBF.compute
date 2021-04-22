@@ -1,4 +1,3 @@
-#pragma kernel Update
 #pragma kernel ComputeDensity
 #pragma kernel ComputeExternalForces
 #pragma kernel Integrate
@@ -9,17 +8,12 @@
 #pragma kernel UpdateVelocity
 
 #include "GPUTrails.cginc"
-#include "noise4D.cginc"
-
 
 StructuredBuffer<Particle> _particleReadBuffer;
 RWStructuredBuffer<Particle> _particleWriteBuffer;
 uint _particleNum;
 float _time;
-float _timeScale;
-float _positionScale;
-float _noiseScale;
-float _gatherPower; // 中心に向かって働く力の強度
+float _gatherPower; // マウスインタラクションの強度
 float4 _mousePos;
 bool _isCollisionOnlyInIntegrate;	// Integrateカーネルで衝突のみにするかどうか
 
@@ -46,16 +40,6 @@ float _wallStiffness;		// 壁係数
 float _wpoly6, _gWpoly6, _lWpoly6;
 float _wspiky, _gWspiky, _lWspiky;
 float _wvisc, _gWvisc, _lWvisc;
-
-[numthreads(256, 1, 1)]
-void Update(uint3 id : SV_DispatchThreadID)
-{
-	uint idx = id.x;
-	if (idx < _particleNum)
-	{
-
-	}
-}
 
 // 密度計算 (全探索版)
 [numthreads(256, 1, 1)]
@@ -212,7 +196,7 @@ void Integrate(uint3 id : SV_DispatchThreadID)
 
 	if (!_isCollisionOnlyInIntegrate) {
 		particle.vel += particle.acc * _dt;
-		particle.pos += (particle.vel * _dt) * _positionScale;
+		particle.pos += particle.vel * _dt;
 	}
 
 	_particleWriteBuffer[index] = particle;

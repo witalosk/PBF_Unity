@@ -13,9 +13,6 @@ namespace Losk.Trail
         // 変数名
         public const string PARTICLE_NUM = "_particleNum";
         public const string TIME = "_time";
-        public const string TIME_SCALE = "_timeScale";
-        public const string POSITION_SCALE = "_positionScale";
-        public const string NOISE_SCALE = "_noiseScale";
         public const string UPDATE_DISTANCE_MIN = "_updateDistaceMin";
         public const string NODE_NUM_PER_TRAIL = "_nodeNumPerTrail";
         public const string LIFE = "_life";
@@ -58,7 +55,6 @@ namespace Losk.Trail
         public const string NODE_BUFFER = "_nodeBuffer";
 
         // カーネル名
-        public const string UPDATE_KERNEL = "Update";
         public const string COMPUTE_DENSITY_KERNEL = "ComputeDensity";
         public const string COMPUTE_EXTERNAL_FORCES_KERNEL = "ComputeExternalForces";
         public const string INTEGRATE_KERNEL = "Integrate";
@@ -67,7 +63,6 @@ namespace Losk.Trail
         public const string POSITION_CORRECTION = "PositionCorrection";
         public const string COMPUTE_DENSITY_FLUCTUATION = "ComputeDensityFluctuation";
         public const string UPDATE_VELOCITY = "UpdateVelocity";
-        public const string WRITE_TO_INPUT_KERNEL = "WriteToInput";
         public const string CALC_INPUT_KERNEL = "CalcInput";
     }
 
