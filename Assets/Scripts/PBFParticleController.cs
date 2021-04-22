@@ -42,10 +42,6 @@ namespace Losk.Trail
         /// </summary>
         public int _particleNum = 100;
         public int ParticleNum { get{ return _particleNum; } set { value = _particleNum; } }
-    
-        public float _timeScale = 1.0f;
-        public float _positionScale = 1.0f;
-        public float _noiseScale = 1.0f;
         public float initRadius = 20f;
         public float _gatherPower = 0.1f;
         public float _wallStiffness = 1.0f;
@@ -87,7 +83,7 @@ namespace Losk.Trail
         {
             // 体積/有効半径/パーティクル半径計算
             _volume = _kernelParticles * _mass / _density; // カーネルパーティクル分の体積
-            _effectiveRadius = Mathf.Pow((3.0f * _volume) / (4.0f * Mathf.PI), 1f / 3f); // 球の体積から半径を計算
+            _effectiveRadius = Mathf.Pow((3.0f * _volume) / (4.0f * Mathf.PI), 1f / 3f); // 球の体積から有効半径を計算
             _particleRadius = Mathf.Pow((Mathf.PI / (6.0f * _kernelParticles)), 1f / 3f) * _effectiveRadius;
             Debug.Log("ParticleRadius: " + _particleRadius);
 
@@ -160,9 +156,6 @@ namespace Losk.Trail
         {
             _particleComputeShader.SetInt(CS_NAMES.PARTICLE_NUM, _particleNum);
             _particleComputeShader.SetFloat(CS_NAMES.TIME, Time.time);
-            _particleComputeShader.SetFloat(CS_NAMES.TIME_SCALE, _timeScale);
-            _particleComputeShader.SetFloat(CS_NAMES.POSITION_SCALE, _positionScale);
-            _particleComputeShader.SetFloat(CS_NAMES.NOISE_SCALE, _noiseScale);
             _particleComputeShader.SetFloat(CS_NAMES.GATHER_POWER, _gatherPower);
             _particleComputeShader.SetFloat(CS_NAMES.DT, _dt);
 

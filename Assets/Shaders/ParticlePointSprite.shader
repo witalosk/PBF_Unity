@@ -85,7 +85,6 @@ Shader "Custom/ParticlePointSprite"
 
             fixed4 frag (g2f i) : SV_Target
             {
-                // sample the texture
                 fixed4 color = tex2D(_MainTex, i.tex) * i.color;
                 if(color.a < 0.3) discard;    
                 return color;

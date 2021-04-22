@@ -1,0 +1,81 @@
+#pragma kernel iInclusiveScan
+#pragma kernel fInclusiveScan
+#pragma kernel iExclusiveScan
+#pragma kernel fExclusiveScan
+#pragma kernel iCopyResultToInput
+#pragma kernel fCopyResultToInput
+
+RWStructuredBuffer<int> _iInput;
+RWStructuredBuffer<int> _iOutput;
+
+RWStructuredBuffer<float> _fInput;
+RWStructuredBuffer<float> _fOutput;
+
+int _elementNum;
+int _loopNum;
+
+[numthreads(8,1,1)]
+void iInclusiveScan (uint3 id : SV_DispatchThreadID)
+{
+    int index = (int)id.x;
+    if (index >= _elementNum) return;
+
+    int powtwo = pow(2, _loopNum);
+
+    _iOutput[index] = (index < powtwo) ? _iInput[index] : _iInput[index] + _iInput[index - powtwo];
+}
+
+[numthreads(8,1,1)]
+void fInclusiveScan (uint3 id : SV_DispatchThreadID)
+{
+    int index = (int)id.x;
+    if (index >= _elementNum) return;
+
+    int powtwo = pow(2, _loopNum);
+
+    _fOutput[index] = (index < powtwo) ? _fInput[index] : _fInput[index] + _fInput[index - powtwo];
+}
+
+[numthreads(8,1,1)]
+void iExclusiveScan (uint3 id : SV_DispatchThreadID)
+{
+    int index = (int)id.x;
+    if (index >= _elementNum) return;
+
+    int powtwo = pow(2, _loopNum);
+    int arrIndex = (_loopNum == 0) ? index + 1 : index;
+
+    _iOutput[0] = 0;
+    _iOutput[arrIndex] = (index < powtwo) ? _iInput[index] : _iInput[index] + _iInput[index - powtwo];
+}
+
+[numthreads(8,1,1)]
+void fExclusiveScan (uint3 id : SV_DispatchThreadID)
+{
+    int index = (int)id.x;
+    if (index >= _elementNum) return;
+
+    int powtwo = pow(2, _loopNum);
+    int arrIndex = (_loopNum == 0) ? index + 1 : index;
+
+    _fOutput[0] = 0.0;
+    _fOutput[arrIndex] = (index < powtwo) ? _fInput[index] : _fInput[index] + _fInput[index - powtwo];
+}
+
+[numthreads(8,1,1)]
+void iCopyResultToInput(uint3 id : SV_DispatchThreadID)
+{
+    int index = (int)id.x;
+    if (index >= _elementNum) return;
+
+    _iInput[index] = _fOutput[index];
+}
+
+[numthreads(8,1,1)]
+void fCopyResultToInput(uint3 id : SV_DispatchThreadID)
+{
+    int index = (int)id.x;
+    if (index >= _elementNum) return;
+
+    _fInput[index] = _fOutput[index];
+}
