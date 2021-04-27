@@ -30,9 +30,9 @@ float _gatherPower; // マウスインタラクションの強度
 float4 _mousePos;
 bool _isCollisionOnlyInIntegrate;	// Integrateカーネルで衝突のみにするかどうか
 
-float4 _spaceMin;
-float4 _spaceMax;
-float4 _gravity;
+float2 _spaceMin;
+float2 _spaceMax;
+float2 _gravity;
 float _effectiveRadius;		// 有効半径
 float _mass;				// 質量
 float _viscosity;			// 粘性係数
@@ -48,7 +48,7 @@ float _densVar;				// 平均密度変動率
 
 float _wallStiffness;		// 壁係数
 
-int3 _nnSearchDivNum;		// 空間分割数
+int2 _nnSearchDivNum;		// 空間分割数
 int _inc;
 int _dir;
 
@@ -58,10 +58,10 @@ float _wspiky, _gWspiky, _lWspiky;
 float _wvisc, _gWvisc, _lWvisc;
 
 // 位置座標 → セル座標
-uint3 PositionToCell(float3 pos)
+uint2 PositionToCell(float2 pos)
 {
-	float3 units = (_spaceMax.xyz - _spaceMin.xyz) / (float3)_nnSearchDivNum;
-	uint3 coor = ((clamp(pos, _spaceMin.xyz, _spaceMax.xyz-0.0001) - _spaceMin.xyz) / units);
+	float2 units = (_spaceMax.xy - _spaceMin.xy) / (float2)_nnSearchDivNum;
+	uint2 coor = ((clamp(pos, _spaceMin.xy, _spaceMax.xy-0.0001) - _spaceMin.xy) / units);
 
 	return coor;
 }
@@ -77,25 +77,22 @@ void ComputeDensity(uint3 id : SV_DispatchThreadID)
 	// 本来は空間分割法を使った近傍探索を行う, ここでは全探索
 	Particle temp;
 	float dens = 0.0;
-	float3 force = 0.0;
 	float r = 0.0;
 	
-	uint3 start = PositionToCell(prt.pos - _effectiveRadius.xxx);
-	uint3 end = PositionToCell(prt.pos + _effectiveRadius.xxx);
+	uint2 start = PositionToCell(prt.pos - _effectiveRadius.xx);
+	uint2 end = PositionToCell(prt.pos + _effectiveRadius.xx);
 
 	for (uint x = start.x; x <= end.x; x++) {
 		for (uint y = start.y; y <= end.y; y++) {
-			for (uint z = start.z; z <= end.z; z++) {
-				// セル内のパーティクルの密度を足す
-				int hash = x + y * _nnSearchDivNum.x + z * _nnSearchDivNum.x * _nnSearchDivNum.y;
-				for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
-					Particle temp = _particleReadBuffer[i];
-					r = distance(temp.pos, prt.pos);
-					if (r <= _effectiveRadius) {
-						// 密度
-						float q = _effectiveRadius * _effectiveRadius - r * r;
-						dens += _mass * _wpoly6 * q * q * q;
-					}
+			// セル内のパーティクルの密度を足す
+			int hash = x + y * _nnSearchDivNum.x;
+			for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
+				Particle temp = _particleReadBuffer[i];
+				r = distance(temp.pos, prt.pos);
+				if (r <= _effectiveRadius) {
+					// 密度
+					float q = _effectiveRadius * _effectiveRadius - r * r;
+					dens += _mass * _wpoly6 * q * q * q;
 				}
 			}
 		}
@@ -115,38 +112,35 @@ void ComputeExternalForces(uint3 id : SV_DispatchThreadId)
 	Particle prt = _particleReadBuffer[index];
 
 	// 粘性項を全探索で計算
-	float3 force = 0.0;
+	float2 force = 0.0;
 	float r = 0.0;
 
-
-	uint3 start = PositionToCell(prt.pos - _effectiveRadius.xxx);
-	uint3 end = PositionToCell(prt.pos + _effectiveRadius.xxx);
+	uint2 start = PositionToCell(prt.pos - _effectiveRadius.xx);
+	uint2 end = PositionToCell(prt.pos + _effectiveRadius.xx);
 
 	for (uint x = start.x; x <= end.x; x++) {
 		for (uint y = start.y; y <= end.y; y++) {
-			for (uint z = start.z; z <= end.z; z++) {
-				// セル内のパーティクルの密度を足す
-				int hash = x + y * _nnSearchDivNum.x + z * _nnSearchDivNum.x * _nnSearchDivNum.y;
-				for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
-					Particle temp = _particleReadBuffer[i];
-					r = distance(temp.pos, prt.pos);
-					if (r <= _effectiveRadius && r > 0.0001) {
-						float q = _effectiveRadius - r;
-						float3 vij = temp.vel - prt.vel;
+			// セル内のパーティクルの密度を足す
+			int hash = x + y * _nnSearchDivNum.x;
+			for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
+				Particle temp = _particleReadBuffer[i];
+				r = distance(temp.pos, prt.pos);
+				if (r <= _effectiveRadius && r > 0.0001) {
+					float q = _effectiveRadius - r;
+					float2 vij = temp.vel - prt.vel;
 
-						force += _viscosity * _mass * (vij / temp.dens) * _lWvisc * q;
-					}
+					force += _viscosity * _mass * (vij / temp.dens) * _lWvisc * q;
 				}
 			}
 		}
 	}
 
 	// 重力(外力)
-	force += _gravity.xyz;
+	force += _gravity.xy;
 
 	// マウスインタラクション
 	if (_mousePos.x > -1000.0) {
-		force += (_mousePos.xyz - prt.pos) * _gatherPower;
+		force += (_mousePos.xy - prt.pos) * _gatherPower;
 	}
 
 	prt.force = force;
@@ -155,56 +149,40 @@ void ComputeExternalForces(uint3 id : SV_DispatchThreadId)
 }
 
 // 境界処理
-void ComputeRepulsion(Particle particle, out float3 opos, out float3 ovel)
+void ComputeRepulsion(Particle particle, out float2 opos, out float2 ovel)
 {
 	float dist;
-	float3 closestPoint; 	// 最近傍点
+	float2 closestPoint; 	// 最近傍点
 	float closestDist;		// 最近傍点までの距離
-	float3 n;				// 法線
+	float2 n;				// 法線
 
 	// X(-)境界
-	closestPoint = float3(_spaceMin.x, particle.pos.yz);
+	closestPoint = float2(_spaceMin.x, particle.pos.y);
 	closestDist = _spaceMin.x - particle.pos.x;
-	n = float3(1, 0, 0);
+	n = float2(1, 0);
 	
 	// X(+)境界
 	dist = particle.pos.x - _spaceMax.x;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(_spaceMax.x, particle.pos.yz);
-		n = float3(-1, 0, 0);
+		closestPoint = float2(_spaceMax.x, particle.pos.y);
+		n = float2(-1, 0);
 	}
 
 	// Y(-)境界
 	dist = _spaceMin.y - particle.pos.y;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.x, _spaceMin.y, particle.pos.z);
-		n = float3(0, 1, 0);
+		closestPoint = float2(particle.pos.x, _spaceMin.y);
+		n = float2(0, 1);
 	}
 
 	// Y(+)境界
 	dist = particle.pos.y - _spaceMax.y;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.x, _spaceMax.y, particle.pos.z);
-		n = float3(0, -1, 0);
-	}
-
-	// Z(-)境界
-	dist = _spaceMin.z - particle.pos.z;
-	if (dist > closestDist) {
-		closestDist = dist;
-		closestPoint = float3(particle.pos.xy, _spaceMin.z);
-		n = float3(0, 0, 1);
-	}
-
-	// Z(+)境界
-	dist = particle.pos.z - _spaceMax.z;
-	if (dist > closestDist) {
-		closestDist = dist;
-		closestPoint = float3(particle.pos.xy, _spaceMax.z);
-		n = float3(0, 0, -1);
+		closestPoint = float2(particle.pos.x, _spaceMax.y);
+		n = float2(0, -1);
 	}
 
 	if (closestDist > 0.0) {
@@ -237,7 +215,7 @@ void Integrate(uint3 id : SV_DispatchThreadID)
 	particle.acc = particle.force;
 
 	// 境界条件
-	float3 opos, ovel;
+	float2 opos, ovel;
 	ComputeRepulsion(particle, opos, ovel);
 	particle.pos = opos;
 	particle.vel = ovel;
@@ -258,23 +236,21 @@ void ComputeScalingFactor(uint3 id : SV_DispatchThreadID)
 	if (index >= _particleNum) return;
 	Particle prt = _particleReadBuffer[index];
 
-	uint3 start = PositionToCell(prt.pos - _effectiveRadius.xxx);
-	uint3 end = PositionToCell(prt.pos + _effectiveRadius.xxx);
+	uint2 start = PositionToCell(prt.pos - _effectiveRadius.xx);
+	uint2 end = PositionToCell(prt.pos + _effectiveRadius.xx);
 	float r = 0.0;
 	float dens = 0.0;
 	for (uint x = start.x; x <= end.x; x++) {
 		for (uint y = start.y; y <= end.y; y++) {
-			for (uint z = start.z; z <= end.z; z++) {
-				// セル内のパーティクルの密度を足す
-				int hash = x + y * _nnSearchDivNum.x + z * _nnSearchDivNum.x * _nnSearchDivNum.y;
-				for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
-					Particle temp = _particleReadBuffer[i];
-					r = distance(temp.pos, prt.pos);
-					if (r <= _effectiveRadius) {
-						// 密度
-						float q = _effectiveRadius * _effectiveRadius - r * r;
-						dens += _mass * _wpoly6 * q * q * q;					
-					}
+			// セル内のパーティクルの密度を足す
+			int hash = x + y * _nnSearchDivNum.x;
+			for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
+				Particle temp = _particleReadBuffer[i];
+				r = distance(temp.pos, prt.pos);
+				if (r <= _effectiveRadius) {
+					// 密度
+					float q = _effectiveRadius * _effectiveRadius - r * r;
+					dens += _mass * _wpoly6 * q * q * q;					
 				}
 			}
 		}
@@ -288,20 +264,18 @@ void ComputeScalingFactor(uint3 id : SV_DispatchThreadID)
 
 	for (uint s = start.x; s <= end.x; s++) {
 		for (uint t = start.y; t <= end.y; t++) {
-			for (uint u = start.z; u <= end.z; u++) {
-				// セル内のパーティクルの密度を足す
-				int hash = s + t * _nnSearchDivNum.x + u * _nnSearchDivNum.x * _nnSearchDivNum.y;
-				for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
-					Particle temp = _particleReadBuffer[i];
-					r = distance(temp.pos, prt.pos);
-					if (r <= _effectiveRadius && r > 0.0) {
-						float3 rij = prt.pos - temp.pos;
-						float q = _effectiveRadius - r;
+			// セル内のパーティクルの密度を足す
+			int hash = s + t * _nnSearchDivNum.x;
+			for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
+				Particle temp = _particleReadBuffer[i];
+				r = distance(temp.pos, prt.pos);
+				if (r <= _effectiveRadius && r > 0.0) {
+					float2 rij = prt.pos - temp.pos;
+					float q = _effectiveRadius - r;
 
-						// 位置変動^2を計算
-						float3 deltaPos = (_gWspiky * q * q * rij / r) / _density;
-						sd += dot(deltaPos, deltaPos);
-					}
+					// 位置変動^2を計算
+					float2 deltaPos = (_gWspiky * q * q * rij / r) / _density;
+					sd += dot(deltaPos, deltaPos);
 				}
 			}
 		}
@@ -324,33 +298,31 @@ void ComputePositionCorrection(uint3 id : SV_DispatchThreadID)
 	float si = prt.scalingFactor;
 
 	float r = 0.0;
-	float3 dp = 0.0;
+	float2 dp = 0.0;
 
-	uint3 start = PositionToCell(prt.pos - _effectiveRadius.xxx);
-	uint3 end = PositionToCell(prt.pos + _effectiveRadius.xxx);
+	uint2 start = PositionToCell(prt.pos - _effectiveRadius.xx);
+	uint2 end = PositionToCell(prt.pos + _effectiveRadius.xx);
 	for (uint x = start.x; x <= end.x; x++) {
 		for (uint y = start.y; y <= end.y; y++) {
-			for (uint z = start.z; z <= end.z; z++) {
-				// セル内のパーティクルの密度を足す
-				int hash = x + y * _nnSearchDivNum.x + z * _nnSearchDivNum.x * _nnSearchDivNum.y;
-				for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
-					Particle temp = _particleReadBuffer[i];
-					r = distance(temp.pos, prt.pos);
-					if (r <= _effectiveRadius && r > 0.0) {
-						float scorr = 0.0f;
-						float3 rij = prt.pos - temp.pos;
+			// セル内のパーティクルの密度を足す
+			int hash = x + y * _nnSearchDivNum.x;
+			for (int i = _cellStartEndBuffer[hash].startIdx; i <= _cellStartEndBuffer[hash].endIdx; i++) {
+				Particle temp = _particleReadBuffer[i];
+				r = distance(temp.pos, prt.pos);
+				if (r <= _effectiveRadius && r > 0.0) {
+					float scorr = 0.0f;
+					float2 rij = prt.pos - temp.pos;
 
-						if(_useArtifactPressure) {
-							float q1 = _effectiveRadius * _effectiveRadius - r * r;
-							float ww = _wpoly6 * q1 * q1 * q1 / _ap_wq;
-							scorr = -_ap_k * pow(abs(ww), _ap_n) * _dt * _dt;
-						}
-
-						float q = _effectiveRadius - r;
-						float sj = temp.scalingFactor;
-
-						dp += (si + sj + scorr) * (_gWspiky * q * q * rij / r) / _density;
+					if(_useArtifactPressure) {
+						float q1 = _effectiveRadius * _effectiveRadius - r * r;
+						float ww = _wpoly6 * q1 * q1 * q1 / _ap_wq;
+						scorr = -_ap_k * pow(abs(ww), _ap_n) * _dt * _dt;
 					}
+
+					float q = _effectiveRadius - r;
+					float sj = temp.scalingFactor;
+
+					dp += (si + sj + scorr) * (_gWspiky * q * q * rij / r) / _density;
 				}
 			}
 		}
@@ -402,8 +374,8 @@ void UpdateVelocity(uint3 id : SV_DispatchThreadID)
 	if (index >= _particleNum) return;
 	Particle prt = _particleReadBuffer[index];
 
-	float3 newpos = prt.pos;
-	float3 prevpos = prt.prevPos;
+	float2 newpos = prt.pos;
+	float2 prevpos = prt.prevPos;
 
 	prt.vel = (newpos - prevpos) / _dt;
 
@@ -419,9 +391,9 @@ void ComputeHash(uint3 id : SV_DispatchThreadID)
 	if (index >= _particleNum) return;
 	Particle prt = _particleReadBuffer[index];
 	
-	int3 coor = PositionToCell(prt.pos);
+	int2 coor = PositionToCell(prt.pos);
 
-	prt.hash = coor.x + coor.y * _nnSearchDivNum.x + coor.z * _nnSearchDivNum.x * _nnSearchDivNum.y;
+	prt.hash = coor.x + coor.y * _nnSearchDivNum.x;
 
 	_particleWriteBuffer[index] = prt;
 }

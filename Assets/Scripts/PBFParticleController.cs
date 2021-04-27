@@ -12,14 +12,14 @@ namespace Losk.Trail
     public struct Particle
     {
         public int index;       // ID
-        public Vector3 pos;     // 位置
-        public Vector3 vel;     // 速度
-        public Vector3 acc;     // 加速度
+        public Vector2 pos;     // 位置
+        public Vector2 vel;     // 速度
+        public Vector2 acc;     // 加速度
         public float dens;      // 密度
-        public Vector3 force;   // 力
-        public Vector3 prevPos; // 前ステップの位置
+        public Vector2 force;   // 力
+        public Vector2 prevPos; // 前ステップの位置
         public float scalingFactor;	// スケーリングファクタ
-        public Vector3 deltaPos;	// 位置修正量
+        public Vector2 deltaPos;	// 位置修正量
         public int hash;        // ハッシュ値
 
     }
@@ -55,9 +55,9 @@ namespace Losk.Trail
         public float _gatherPower = 0.1f;
         public float _wallStiffness = 1.0f;
 
-        public Vector3 _spaceMin;
-        public Vector3 _spaceMax;
-        public Vector3 _gravity;
+        public Vector2 _spaceMin;
+        public Vector2 _spaceMax;
+        public Vector2 _gravity;
 
         /// <summary>
         /// シミュレーション用パラメータ
@@ -88,7 +88,7 @@ namespace Losk.Trail
         /// <summary>
         /// 近傍探索用グリッドの分割数
         /// </summary>
-        public Vector3Int _nnSearchDivNum = new Vector3Int(10, 10, 10);
+        public Vector2Int _nnSearchDivNum = new Vector2Int(10, 10);
 
 
         /// <summary>
@@ -131,21 +131,21 @@ namespace Losk.Trail
             // バッファの初期化
             _particleBuffer = new SwapBuffer(_particleNum, Marshal.SizeOf(typeof(Particle)));
             _deltaDensBuffer = new ComputeBuffer(_particleNum, sizeof(float));
-            _cellStartEndBuffer = new ComputeBuffer(_nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z, Marshal.SizeOf(typeof(CellStartEnd)));
+            _cellStartEndBuffer = new ComputeBuffer(_nnSearchDivNum.x * _nnSearchDivNum.y, Marshal.SizeOf(typeof(CellStartEnd)));
             _particleIdBuffer = new ComputeBuffer(_particleNum, sizeof(int));
 
             _particleBuffer.Current.SetData(
                 Enumerable.Range(0, _particleNum)
                 .Select(_ => new Particle() { 
                     index = _,
-                    pos = Random.insideUnitSphere * initRadius, 
-                    vel = Vector3.zero,
-                    acc = Vector3.zero,
+                    pos = Random.insideUnitCircle * initRadius, 
+                    vel = Vector2.zero,
+                    acc = Vector2.zero,
                     dens = 0.0f,
-                    force = Vector3.zero,
-                    prevPos = Vector3.zero,
+                    force = Vector2.zero,
+                    prevPos = Vector2.zero,
                     scalingFactor = 0.0f,
-                    deltaPos = Vector3.zero,
+                    deltaPos = Vector2.zero,
                 }).ToArray()
             );
 
@@ -153,14 +153,14 @@ namespace Losk.Trail
                 Enumerable.Range(0, _particleNum)
                 .Select(_ => new Particle() {
                     index = _,
-                    pos = Random.insideUnitSphere * initRadius, 
-                    vel = Vector3.zero,
-                    acc = Vector3.zero,
+                    pos = Random.insideUnitCircle * initRadius, 
+                    vel = Vector2.zero,
+                    acc = Vector2.zero,
                     dens = 0.0f,
-                    force = Vector3.zero,
-                    prevPos = Vector3.zero,
+                    force = Vector2.zero,
+                    prevPos = Vector2.zero,
                     scalingFactor = 0.0f,
-                    deltaPos = Vector3.zero,
+                    deltaPos = Vector2.zero,
                 }).ToArray()
             );
 
@@ -185,7 +185,7 @@ namespace Losk.Trail
             _particleComputeShader.SetVector(CS_NAMES.SPACE_MAX, _spaceMax);
             _particleComputeShader.SetVector(CS_NAMES.MOUSE_POS, new Vector4(-1000.0f, -1000.0f, -1000.0f, 0f));
 
-            _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, new int[]{_nnSearchDivNum.x, _nnSearchDivNum.y, _nnSearchDivNum.z});
+            _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, new int[]{_nnSearchDivNum.x, _nnSearchDivNum.y});
         }
 
         /// <summary>

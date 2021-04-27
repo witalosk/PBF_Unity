@@ -44,7 +44,7 @@ Shader "Custom/ParticlePointSprite"
             v2g vert (uint id : SV_VertexID, uint instanceId : SV_InstanceID)
             {
                 v2g o;
-                o.pos = float4(_particleBuffer[instanceId].pos, 1);
+                o.pos = float4(_particleBuffer[instanceId].pos, 0.0, 1.0);
                 o.tex = float2(0, 0);
                 o.color = _PointColor * _particleBuffer[instanceId].dens * 0.0005;
                 // o.color.r = (float)(_particleBuffer[instanceId].hash % 10) / 10.0;

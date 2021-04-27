@@ -39,14 +39,14 @@ void CalcInput (uint3 id : SV_DispatchThreadID)
     {
         // 前フレームの位置を取得
         Node beforeNode = GetNode(particleIdx, currentNodeIdx);
-        float dist = distance(particle.pos, beforeNode.pos);
+        float dist = distance(float3(particle.pos, 0.0), beforeNode.pos);
         update = dist > _updateDistanceMin;
     }
 
     if (update) {
         Node node;
         node.time = _time;
-        node.pos = particle.pos;
+        node.pos = float3(particle.pos, 0.0);
 
         // バッファをあふれたIdは先頭にもどす
         currentNodeIdx++;
