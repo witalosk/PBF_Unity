@@ -58,6 +58,7 @@ namespace Losk.Trail
         public const string TRAIL_BUFFER = "_trailBuffer";
         public const string NODE_BUFFER = "_nodeBuffer";
         public const string CELL_START_END_BUFFER = "_cellStartEndBuffer";
+        public const string PARTICLE_ID_BUFFER = "_particleIdBuffer";
 
 
         // カーネル名

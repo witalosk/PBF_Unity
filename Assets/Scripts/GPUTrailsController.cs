@@ -83,20 +83,9 @@ namespace Losk.Trail
             _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.TRAIL_BUFFER, _trailBuffer);
             _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.NODE_BUFFER, _nodeBuffer);
             _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_BUFFER, _particleController._particleBuffer.Current);
+            _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_ID_BUFFER, _particleController._particleIdBuffer);
             
-            _trailsComputeShader.Dispatch(kernelIdx, particleNum, 1, 1);
-
-            // Particle[] res = new Particle[particleNum];
-            // _particleController._particleBuffer.GetData(res);
-            // Debug.Log(res[0].pos);
-
-            // Trail[] res = new Trail[particleNum];
-            // _trailBuffer.GetData(res);
-            // // Debug.Log(res[0].currentNodeIdx);
-
-            // Node[] resNode = new Node[particleNum * _nodeNumPerTrail];
-            // _nodeBuffer.GetData(resNode);
-            // Debug.Log(resNode[0].pos);
+            _trailsComputeShader.Dispatch(kernelIdx, Mathf.CeilToInt((float)particleNum / 256f), 1, 1);
         }
 
         void OnDestroy()

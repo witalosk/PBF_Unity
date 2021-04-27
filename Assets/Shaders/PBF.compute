@@ -22,6 +22,7 @@ RWStructuredBuffer<Particle> _particleReadBuffer;
 RWStructuredBuffer<Particle> _particleWriteBuffer;
 RWStructuredBuffer<float> _fOutputBuffer;
 RWStructuredBuffer<CellStartEnd> _cellStartEndBuffer;
+RWStructuredBuffer<int> _particleIdBuffer;
 
 uint _particleNum;
 float _time;
@@ -94,12 +95,9 @@ void ComputeDensity(uint3 id : SV_DispatchThreadID)
 						// 密度
 						float q = _effectiveRadius * _effectiveRadius - r * r;
 						dens += _mass * _wpoly6 * q * q * q;
-
 					}
 				}
-
 			}
-
 		}
 	}
 
@@ -137,12 +135,9 @@ void ComputeExternalForces(uint3 id : SV_DispatchThreadId)
 						float3 vij = temp.vel - prt.vel;
 
 						force += _viscosity * _mass * (vij / temp.dens) * _lWvisc * q;
-
 					}
 				}
-
 			}
-
 		}
 	}
 
@@ -235,7 +230,6 @@ void Integrate(uint3 id : SV_DispatchThreadID)
 
 	if (!_isCollisionOnlyInIntegrate) {
 		particle.prevPos = particle.pos;
-		particle.prevVel = particle.vel;
 	}
 
 	float effectiveRange = 0.0;
@@ -282,9 +276,7 @@ void ComputeScalingFactor(uint3 id : SV_DispatchThreadID)
 						dens += _mass * _wpoly6 * q * q * q;					
 					}
 				}
-
 			}
-
 		}
 	}
 
@@ -311,9 +303,7 @@ void ComputeScalingFactor(uint3 id : SV_DispatchThreadID)
 						sd += dot(deltaPos, deltaPos);
 					}
 				}
-
 			}
-
 		}
 	}
 
@@ -396,11 +386,9 @@ void ComputeDensityFluctuation(uint3 id : SV_DispatchThreadID)
 
 	if (err >= 0.0) {
 		_fOutputBuffer[index] = err / _density;
-		prt.deltaDens = err / _density;
 	}
 	else {
 		_fOutputBuffer[index] = 0.0;
-		prt.deltaPos = 0.0;
 	}
 
 	_particleWriteBuffer[index] = prt;
@@ -463,7 +451,7 @@ void ParallelBitonicParticle(uint3 id : SV_DispatchThreadID)
 	_particleWriteBuffer[_inc + i] = x1;
 }
 
-// セルのstartとendを挿入
+// セルのstartとendを挿入 & ParticleIdを挿入
 [numthreads(256, 1, 1)]
 void ComputeCellStartEnd(uint3 id : SV_DispatchThreadID)
 {
@@ -484,4 +472,6 @@ void ComputeCellStartEnd(uint3 id : SV_DispatchThreadID)
 	else if (index == (int)_particleNum - 1) {
 		_cellStartEndBuffer[prt.hash].endIdx = index;
 	}
+
+	_particleIdBuffer[prt.index] = index;
 }

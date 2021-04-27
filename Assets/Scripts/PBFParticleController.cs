@@ -11,16 +11,15 @@ namespace Losk.Trail
     /// </summary>
     public struct Particle
     {
+        public int index;       // ID
         public Vector3 pos;     // 位置
         public Vector3 vel;     // 速度
         public Vector3 acc;     // 加速度
         public float dens;      // 密度
         public Vector3 force;   // 力
         public Vector3 prevPos; // 前ステップの位置
-        public Vector3 prevVel; // 前ステップの速度
         public float scalingFactor;	// スケーリングファクタ
         public Vector3 deltaPos;	// 位置修正量
-        public float deltaDens; // 密度変動量
         public int hash;        // ハッシュ値
 
     }
@@ -42,9 +41,10 @@ namespace Losk.Trail
         [SerializeField]
         ComputeShader _particleComputeShader;
 
-        public SwapBuffer _particleBuffer;
-        public ComputeBuffer _deltaDensBuffer;
-        public ComputeBuffer _cellStartEndBuffer;
+        public SwapBuffer _particleBuffer;          // パーティクル情報を詰めておく
+        public ComputeBuffer _deltaDensBuffer;      // 密度変動量計算用バッファ
+        public ComputeBuffer _cellStartEndBuffer;   // 空間分割法におけるセルの最初と最後を詰めておくバッファ
+        public ComputeBuffer _particleIdBuffer;     // パーティクルのソートによってトレイルがぐちゃぐちゃになるのを防ぐバッファ
 
         /// <summary>
         /// パーティクルの数
@@ -109,12 +109,10 @@ namespace Losk.Trail
             int r = Mathf.CeilToInt(Mathf.Log(_particleNum, 2));
             _particleNum = (int)Mathf.Pow(2, r);
 
-
             // 体積/有効半径/パーティクル半径計算
             _volume = _kernelParticles * _mass / _density; // カーネルパーティクル分の体積
             _effectiveRadius = Mathf.Pow((3.0f * _volume) / (4.0f * Mathf.PI), 1f / 3f); // 球の体積から有効半径を計算
             _particleRadius = Mathf.Pow((Mathf.PI / (6.0f * _kernelParticles)), 1f / 3f) * _effectiveRadius;
-            Debug.Log("ParticleRadius: " + _particleRadius);
 
             // グループ数計算
             _groupNum.x = Mathf.CeilToInt(_particleNum / THREAD_NUM_x) + 1;
@@ -134,38 +132,42 @@ namespace Losk.Trail
             _particleBuffer = new SwapBuffer(_particleNum, Marshal.SizeOf(typeof(Particle)));
             _deltaDensBuffer = new ComputeBuffer(_particleNum, sizeof(float));
             _cellStartEndBuffer = new ComputeBuffer(_nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z, Marshal.SizeOf(typeof(CellStartEnd)));
+            _particleIdBuffer = new ComputeBuffer(_particleNum, sizeof(int));
 
             _particleBuffer.Current.SetData(
                 Enumerable.Range(0, _particleNum)
                 .Select(_ => new Particle() { 
+                    index = _,
                     pos = Random.insideUnitSphere * initRadius, 
                     vel = Vector3.zero,
                     acc = Vector3.zero,
                     dens = 0.0f,
                     force = Vector3.zero,
                     prevPos = Vector3.zero,
-                    prevVel = Vector3.zero,
                     scalingFactor = 0.0f,
                     deltaPos = Vector3.zero,
-                    deltaDens = 0.0f
                 }).ToArray()
             );
 
             _particleBuffer.Other.SetData(
                 Enumerable.Range(0, _particleNum)
-                .Select(_ => new Particle() { 
+                .Select(_ => new Particle() {
+                    index = _,
                     pos = Random.insideUnitSphere * initRadius, 
                     vel = Vector3.zero,
                     acc = Vector3.zero,
                     dens = 0.0f,
                     force = Vector3.zero,
                     prevPos = Vector3.zero,
-                    prevVel = Vector3.zero,
                     scalingFactor = 0.0f,
                     deltaPos = Vector3.zero,
-                    deltaDens = 0.0f
                 }).ToArray()
             );
+
+            _particleIdBuffer.SetData(
+                Enumerable.Range(0, _particleNum).ToArray()
+            );
+
             _particleComputeShader.SetVector(CS_NAMES.GRAVITY, _gravity);
             _particleComputeShader.SetFloat(CS_NAMES.EFFECTIVE_RADIUS, _effectiveRadius);
             _particleComputeShader.SetFloat(CS_NAMES.MASS, _mass);
@@ -186,6 +188,9 @@ namespace Losk.Trail
             _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, new int[]{_nnSearchDivNum.x, _nnSearchDivNum.y, _nnSearchDivNum.z});
         }
 
+        /// <summary>
+        /// シミュレーションを1step進める
+        /// </summary>
         public void LocalUpdate()
         {
             _particleComputeShader.SetInt(CS_NAMES.PARTICLE_NUM, _particleNum);
@@ -240,6 +245,7 @@ namespace Losk.Trail
             _particleBuffer.Release();
             _deltaDensBuffer.Release();
             _cellStartEndBuffer.Release();
+            _particleIdBuffer.Release();
         }
 
         /// <summary>
@@ -417,6 +423,7 @@ namespace Losk.Trail
             kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_CELL_START_END_KERNEL);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.CELL_START_END_BUFFER, _cellStartEndBuffer);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_ID_BUFFER, _particleIdBuffer);
             _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
         }
     }

@@ -10,6 +10,7 @@ uint _particleNum;
 RWStructuredBuffer<Trail> _trailBuffer;
 RWStructuredBuffer<Node> _nodeBuffer;
 RWStructuredBuffer<Particle> _particleBuffer;
+RWStructuredBuffer<int> _particleIdBuffer;
 
 Node GetNode(int trailIdx, int nodeIdx)
 {
@@ -29,7 +30,7 @@ void CalcInput (uint3 id : SV_DispatchThreadID)
     if (particleIdx >= _particleNum) return;
 
     Trail trail = _trailBuffer[particleIdx];
-    Particle particle = _particleBuffer[particleIdx];
+    Particle particle = _particleBuffer[_particleIdBuffer[particleIdx]];
     int currentNodeIdx = trail.currentNodeIdx;
 
     bool update = true;
