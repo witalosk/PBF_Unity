@@ -13,8 +13,10 @@ RWStructuredBuffer<float> _fOutput;
 
 int _elementNum;
 int _loopNum;
+int _inc;
+int _dir;
 
-[numthreads(8,1,1)]
+[numthreads(256,1,1)]
 void iInclusiveScan (uint3 id : SV_DispatchThreadID)
 {
     int index = (int)id.x;
@@ -25,7 +27,7 @@ void iInclusiveScan (uint3 id : SV_DispatchThreadID)
     _iOutput[index] = (index < powtwo) ? _iInput[index] : _iInput[index] + _iInput[index - powtwo];
 }
 
-[numthreads(8,1,1)]
+[numthreads(256,1,1)]
 void fInclusiveScan (uint3 id : SV_DispatchThreadID)
 {
     int index = (int)id.x;
@@ -36,7 +38,7 @@ void fInclusiveScan (uint3 id : SV_DispatchThreadID)
     _fOutput[index] = (index < powtwo) ? _fInput[index] : _fInput[index] + _fInput[index - powtwo];
 }
 
-[numthreads(8,1,1)]
+[numthreads(256,1,1)]
 void iExclusiveScan (uint3 id : SV_DispatchThreadID)
 {
     int index = (int)id.x;
@@ -49,7 +51,7 @@ void iExclusiveScan (uint3 id : SV_DispatchThreadID)
     _iOutput[arrIndex] = (index < powtwo) ? _iInput[index] : _iInput[index] + _iInput[index - powtwo];
 }
 
-[numthreads(8,1,1)]
+[numthreads(256,1,1)]
 void fExclusiveScan (uint3 id : SV_DispatchThreadID)
 {
     int index = (int)id.x;
@@ -62,7 +64,7 @@ void fExclusiveScan (uint3 id : SV_DispatchThreadID)
     _fOutput[arrIndex] = (index < powtwo) ? _fInput[index] : _fInput[index] + _fInput[index - powtwo];
 }
 
-[numthreads(8,1,1)]
+[numthreads(256,1,1)]
 void iCopyResultToInput(uint3 id : SV_DispatchThreadID)
 {
     int index = (int)id.x;
@@ -71,7 +73,7 @@ void iCopyResultToInput(uint3 id : SV_DispatchThreadID)
     _iInput[index] = _fOutput[index];
 }
 
-[numthreads(8,1,1)]
+[numthreads(256,1,1)]
 void fCopyResultToInput(uint3 id : SV_DispatchThreadID)
 {
     int index = (int)id.x;
@@ -79,3 +81,4 @@ void fCopyResultToInput(uint3 id : SV_DispatchThreadID)
 
     _fInput[index] = _fOutput[index];
 }
+

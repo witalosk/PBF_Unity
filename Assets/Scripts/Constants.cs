@@ -34,6 +34,9 @@ namespace Losk.Trail
         public const string AP_WQ = "_ap_wq";
         public const string IS_COLLISION_ONLY_IN_INTEGRATE = "_isCollisionOnlyInIntegrate";
         public const string WALL_STIFFNESS = "_wallStiffness";
+        public const string NNSEARCH_DIM = "_nnSearchDivNum";
+        public const string INC = "_inc";
+        public const string DIR = "_dir";
 
         // カーネル関数(window function)
         public const string WPOLY6 = "_wpoly6";
@@ -50,9 +53,12 @@ namespace Losk.Trail
         // バッファ
         public const string PARTICLE_READ_BUFFER = "_particleReadBuffer";
         public const string PARTICLE_WRITE_BUFFER = "_particleWriteBuffer";
+        public const string F_OUTPUT_BUFFER = "_fOutputBuffer";
         public const string PARTICLE_BUFFER = "_particleBuffer";
         public const string TRAIL_BUFFER = "_trailBuffer";
         public const string NODE_BUFFER = "_nodeBuffer";
+        public const string CELL_START_END_BUFFER = "_cellStartEndBuffer";
+
 
         // カーネル名
         public const string COMPUTE_DENSITY_KERNEL = "ComputeDensity";
@@ -64,6 +70,9 @@ namespace Losk.Trail
         public const string COMPUTE_DENSITY_FLUCTUATION = "ComputeDensityFluctuation";
         public const string UPDATE_VELOCITY = "UpdateVelocity";
         public const string CALC_INPUT_KERNEL = "CalcInput";
+        public const string COMPUTE_HASH_KERNEL = "ComputeHash";
+        public const string BIOTONIC_SORT_KERNEL = "ParallelBitonicParticle";
+        public const string COMPUTE_CELL_START_END_KERNEL = "ComputeCellStartEnd";
     }
 
 }

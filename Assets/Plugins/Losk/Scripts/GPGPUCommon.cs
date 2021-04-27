@@ -9,7 +9,7 @@ namespace Losk
     /// </summary>
     public static class GPGPUCommon
     {
-        private const int THREAD_SIZE_X = 8;
+        private const int THREAD_SIZE_X = 256;
 
         private static ComputeShader _cs;
         private static bool _isInitialized = false;
@@ -22,6 +22,7 @@ namespace Losk
             public static int fExclusiveScanId;
             public static int iCopyResultToInputId;
             public static int fCopyResultToInputId;
+            public static int ParallelBitonicId;
         }
 
         private static class VariableIndexes
@@ -32,6 +33,7 @@ namespace Losk
             public static int iOutputId;
             public static int fInputId;
             public static int fOutputId;
+            public static int kvInputId;
         }
 
         private static void InitializeCheck()
@@ -154,6 +156,7 @@ namespace Losk
 
             result.Release();
         }
+
     }
 
 }

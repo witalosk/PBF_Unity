@@ -13,6 +13,7 @@ struct Particle
 	float scalingFactor;	// スケーリングファクタ
 	float3 deltaPos;		// 位置修正量
 	float deltaDens;	// 密度変動量
+	int hash;			// ハッシュ値
 };
 
 struct Trail

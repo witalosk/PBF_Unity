@@ -46,7 +46,10 @@ Shader "Custom/ParticlePointSprite"
                 v2g o;
                 o.pos = float4(_particleBuffer[instanceId].pos, 1);
                 o.tex = float2(0, 0);
-                o.color = _PointColor;
+                o.color = _PointColor * _particleBuffer[instanceId].dens * 0.0005;
+                // o.color.r = (float)(_particleBuffer[instanceId].hash % 10) / 10.0;
+                // o.color.g = (float)((_particleBuffer[instanceId].hash / 10) % 10) / 10.0;
+                // o.color.b = (float)(_particleBuffer[instanceId].hash / 1000) / 10.0;
                 return o;
             }
 

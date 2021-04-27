@@ -17,10 +17,15 @@ namespace Losk
         [SerializeField]
         uint _skipFrameNum = 1;
 
+        float _fpsSum = 0f;
+        int _addNum = 0;
+
         void Update()
         {
             if (Time.frameCount % (_skipFrameNum + 1) == 0) {
-                _textObject.text = (1.0f / Time.deltaTime).ToString("f1") + "fps";
+                _fpsSum += 1.0f / Time.deltaTime;
+                _addNum++;
+                _textObject.text = (1.0f / Time.deltaTime).ToString("f1") + "fps (avg: " + (_fpsSum / (float)_addNum).ToString("f1") + "fps)";
             }
         }
     }

@@ -21,7 +21,14 @@ namespace Losk.Trail
         public float scalingFactor;	// スケーリングファクタ
         public Vector3 deltaPos;	// 位置修正量
         public float deltaDens; // 密度変動量
+        public int hash;        // ハッシュ値
 
+    }
+
+    public struct CellStartEnd
+    {
+        public int startIdx;
+        public int endIdx;
     }
 
     /// <summary>
@@ -36,6 +43,8 @@ namespace Losk.Trail
         ComputeShader _particleComputeShader;
 
         public SwapBuffer _particleBuffer;
+        public ComputeBuffer _deltaDensBuffer;
+        public ComputeBuffer _cellStartEndBuffer;
 
         /// <summary>
         /// パーティクルの数
@@ -77,16 +86,38 @@ namespace Losk.Trail
         public float _ap_q = 0.2f;                  // 人工圧力係数q
         
         /// <summary>
+        /// 近傍探索用グリッドの分割数
+        /// </summary>
+        public Vector3Int _nnSearchDivNum = new Vector3Int(10, 10, 10);
+
+
+        /// <summary>
+        /// groupの数
+        /// </summary>
+        /// <returns></returns>
+        private Vector3Int _groupNum = new Vector3Int(1, 1, 1);
+
+        private const int THREAD_NUM_x = 256;
+
+        
+        /// <summary>
         /// 初期化処理
         /// </summary>
         void Start()
         {
+            // パーティクル数を2の累乗に丸める(BiotonicSort用)
+            int r = Mathf.CeilToInt(Mathf.Log(_particleNum, 2));
+            _particleNum = (int)Mathf.Pow(2, r);
+
+
             // 体積/有効半径/パーティクル半径計算
             _volume = _kernelParticles * _mass / _density; // カーネルパーティクル分の体積
             _effectiveRadius = Mathf.Pow((3.0f * _volume) / (4.0f * Mathf.PI), 1f / 3f); // 球の体積から有効半径を計算
             _particleRadius = Mathf.Pow((Mathf.PI / (6.0f * _kernelParticles)), 1f / 3f) * _effectiveRadius;
             Debug.Log("ParticleRadius: " + _particleRadius);
 
+            // グループ数計算
+            _groupNum.x = Mathf.CeilToInt(_particleNum / THREAD_NUM_x) + 1;
 
             // カーネル関数の係数部分定義
             _particleComputeShader.SetFloat(CS_NAMES.WPOLY6, 315f / (64f * Mathf.PI * Mathf.Pow(_effectiveRadius, 9f)));
@@ -101,7 +132,8 @@ namespace Losk.Trail
 
             // バッファの初期化
             _particleBuffer = new SwapBuffer(_particleNum, Marshal.SizeOf(typeof(Particle)));
-
+            _deltaDensBuffer = new ComputeBuffer(_particleNum, sizeof(float));
+            _cellStartEndBuffer = new ComputeBuffer(_nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z, Marshal.SizeOf(typeof(CellStartEnd)));
 
             _particleBuffer.Current.SetData(
                 Enumerable.Range(0, _particleNum)
@@ -150,6 +182,8 @@ namespace Losk.Trail
             _particleComputeShader.SetVector(CS_NAMES.SPACE_MIN, _spaceMin);
             _particleComputeShader.SetVector(CS_NAMES.SPACE_MAX, _spaceMax);
             _particleComputeShader.SetVector(CS_NAMES.MOUSE_POS, new Vector4(-1000.0f, -1000.0f, -1000.0f, 0f));
+
+            _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, new int[]{_nnSearchDivNum.x, _nnSearchDivNum.y, _nnSearchDivNum.z});
         }
 
         public void LocalUpdate()
@@ -160,6 +194,9 @@ namespace Losk.Trail
             _particleComputeShader.SetFloat(CS_NAMES.DT, _dt);
 
             // ここからメインループ
+
+            // ハッシュ値の計算
+            ComputeHash();
 
             // SPHによる密度計算 
             ComputeDensity();
@@ -174,7 +211,10 @@ namespace Losk.Trail
             // 位置修正反復
             int iter = 0;           // 反復回数
             float densVar = 1.0f;   // 密度の分散
-            while ((densVar > _densFluctuation) || (iter < _minIterations) && (iter < _maxIterations)) {
+            while (((densVar > _densFluctuation) || (iter < _minIterations)) && (iter < _maxIterations)) {
+                // ハッシュ値の計算
+                ComputeHash();
+
                 ComputeScalingFactor();         // caluculate λ_i
                 ComputePositionCorrection();    // caluculate Δp_i
 
@@ -198,6 +238,8 @@ namespace Losk.Trail
         void OnDestroy()
         {
             _particleBuffer.Release();
+            _deltaDensBuffer.Release();
+            _cellStartEndBuffer.Release();
         }
 
         /// <summary>
@@ -226,7 +268,8 @@ namespace Losk.Trail
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_DENSITY_KERNEL);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.CELL_START_END_BUFFER, _cellStartEndBuffer);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
         }
     
@@ -248,7 +291,8 @@ namespace Losk.Trail
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_EXTERNAL_FORCES_KERNEL);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.CELL_START_END_BUFFER, _cellStartEndBuffer);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
         }
 
@@ -260,7 +304,7 @@ namespace Losk.Trail
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.INTEGRATE_KERNEL);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
         }
 
@@ -272,19 +316,21 @@ namespace Losk.Trail
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_SCALING_FACTOR);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.CELL_START_END_BUFFER, _cellStartEndBuffer);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
         }
 
         /// <summary>
-        /// 位置修正量の計算と位置修正
+        /// 位置修正量の計算
         /// </summary>
         void ComputePositionCorrection()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_POSITION_CORRECTION);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.CELL_START_END_BUFFER, _cellStartEndBuffer);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
         }
 
@@ -296,7 +342,7 @@ namespace Losk.Trail
             int kernelIdx_pc = _particleComputeShader.FindKernel(CS_NAMES.POSITION_CORRECTION);
             _particleComputeShader.SetBuffer(kernelIdx_pc, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx_pc, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx_pc, _particleNum, 1, 1);
+            _particleComputeShader.Dispatch(kernelIdx_pc, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
         }
 
@@ -306,20 +352,19 @@ namespace Losk.Trail
         /// <returns></returns>
         float ComputeDensityFluctuation()
         {
-            int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_POSITION_CORRECTION);
+            int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_DENSITY_FLUCTUATION);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.F_OUTPUT_BUFFER, _deltaDensBuffer);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
 
-            float sum = 0.0f;
-            Particle[] temp = new Particle[_particleNum];
-            _particleBuffer.Current.GetData(temp);
-            for (int i = 0; i < _particleNum; i++) {
-                sum += temp[i].deltaDens;
-            }
 
-            return sum / (float)_particleNum;
+            Losk.GPGPUCommon.InclusiveScan<float>(_deltaDensBuffer);
+
+            float[] result = new float[1];
+            _deltaDensBuffer.GetData(result, 0, _particleNum - 1, 1);
+            return result[0] / (float)_particleNum;
         }
 
         /// <summary>
@@ -330,8 +375,49 @@ namespace Losk.Trail
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.UPDATE_VELOCITY);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-            _particleComputeShader.Dispatch(kernelIdx, _particleNum, 1, 1);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
             _particleBuffer.Swap();
+        }
+
+        /// <summary>
+        /// ハッシュを計算し、ハッシュをもとにソートし、セルのStart/Endインデックスを格納
+        /// </summary>
+        void ComputeHash()
+        {
+            // ハッシュを計算
+            int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_HASH_KERNEL);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
+            _particleBuffer.Swap();
+
+            
+            // Biotonicソート (要素数が2の累乗である必要あり)
+            kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.BIOTONIC_SORT_KERNEL);
+
+            int nlog = (int)(Mathf.Log(_particleNum, 2));
+            int inc, B_index;
+
+            for (int i = 0; i < nlog; i++) {
+                inc = 1 << i;
+                for (int j = 0; j < i + 1; j++) {
+                    B_index = 2;
+                    _particleComputeShader.SetInt(CS_NAMES.INC, inc * 2 / B_index);
+                    _particleComputeShader.SetInt(CS_NAMES.DIR, 2 << i);
+                    _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
+                    _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
+                    _particleComputeShader.Dispatch(kernelIdx, _particleNum / B_index /THREAD_NUM_x, _groupNum.y, _groupNum.z);
+                    _particleBuffer.Swap();
+                    inc /= B_index;
+                }
+
+            }
+
+            // Start/EndのIDを検索して格納
+            kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_CELL_START_END_KERNEL);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.CELL_START_END_BUFFER, _cellStartEndBuffer);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
         }
     }
 

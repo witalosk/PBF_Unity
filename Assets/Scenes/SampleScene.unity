@@ -578,15 +578,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _particleComputeShader: {fileID: 7200000, guid: a7788284607c608469a62a2b852285bb, type: 3}
-  _particleNum: 10000
-  _timeScale: 1
-  _positionScale: 1
-  _noiseScale: 0.1
+  _particleNum: 8000
   initRadius: 0.4
   _gatherPower: 5.32
   _wallStiffness: 0.01
   _spaceMin: {x: -0.5, y: -0.5, z: -0.5}
-  _spaceMax: {x: 0.5, y: 2, z: 0.5}
+  _spaceMax: {x: 0.5, y: 1, z: 0.5}
   _gravity: {x: 0, y: -9.8, z: 0}
   _effectiveRadius: 20
   _mass: 0.1
@@ -595,13 +592,14 @@ MonoBehaviour:
   _viscosity: 0.001
   _kernelParticles: 20
   _epsilon: 60
-  _densFluctuation: 0.05
-  _minIterations: 2
-  _maxIterations: 10
+  _densFluctuation: 0.016
+  _minIterations: 1
+  _maxIterations: 2
   _useArtificialPressure: 1
   _ap_k: 0.1
   _ap_n: 4
   _ap_q: 0.2
+  _nnSearchDivNum: {x: 5, y: 5, z: 5}
 --- !u!4 &1226800648
 Transform:
   m_ObjectHideFlags: 0
@@ -717,8 +715,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -465, y: 274}
-  m_SizeDelta: {x: 160, y: 30}
+  m_AnchoredPosition: {x: -352.2, y: 274}
+  m_SizeDelta: {x: 384.97, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1413548743
 MonoBehaviour:
