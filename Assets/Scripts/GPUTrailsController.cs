@@ -58,7 +58,7 @@ namespace Losk.Trail
             const float MAX_FPS = 60f;
             _nodeNumPerTrail = Mathf.CeilToInt(_life * MAX_FPS);
 
-            int particleNum = _particleController.ParticleNum;
+            int particleNum = _particleController._particleNum;
 
             // バッファの初期化
             _trailBuffer = new ComputeBuffer(particleNum, Marshal.SizeOf(typeof(Trail)));
@@ -73,7 +73,7 @@ namespace Losk.Trail
 
         public void LocalUpdate()
         {
-            int particleNum = _particleController.ParticleNum;
+            int particleNum = _particleController._particleNum;
 
             int kernelIdx = _trailsComputeShader.FindKernel(CS_NAMES.CALC_INPUT_KERNEL);
             _trailsComputeShader.SetFloat(CS_NAMES.TIME, Time.time);

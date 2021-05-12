@@ -22,7 +22,7 @@ namespace Losk.Trail
             _material.SetBuffer(CS_NAMES.PARTICLE_BUFFER, _particleController._particleBuffer.Current);
             _material.SetPass(0);
 
-            int particleNum = _particleController.ParticleNum;
+            int particleNum = _particleController._particleNum;
             Graphics.DrawProceduralNow(MeshTopology.Points, 1, particleNum);
 
         }

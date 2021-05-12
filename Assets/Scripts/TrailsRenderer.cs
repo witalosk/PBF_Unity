@@ -27,7 +27,7 @@ namespace Losk.Trail
             _material.SetPass(0);
 
             int nodeNumPerTrail = _trailController._nodeNumPerTrail;
-            int particleNum = _particleController.ParticleNum;
+            int particleNum = _particleController._particleNum;
             Graphics.DrawProceduralNow(MeshTopology.Points, nodeNumPerTrail, particleNum);
 
         }

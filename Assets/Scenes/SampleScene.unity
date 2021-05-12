@@ -585,7 +585,6 @@ MonoBehaviour:
   _spaceMin: {x: -0.5, y: -0.5, z: -0.5}
   _spaceMax: {x: 0.5, y: 1, z: 0.5}
   _gravity: {x: 0, y: -9.8, z: 0}
-  _effectiveRadius: 20
   _mass: 0.1
   _density: 997
   _dt: 0.016
@@ -599,7 +598,7 @@ MonoBehaviour:
   _ap_k: 0.1
   _ap_n: 4
   _ap_q: 0.2
-  _nnSearchDivNum: {x: 5, y: 5, z: 5}
+  _nnSearchDivNum: {x: 10, y: 10, z: 10}
 --- !u!4 &1226800648
 Transform:
   m_ObjectHideFlags: 0
@@ -713,11 +712,11 @@ RectTransform:
   m_Father: {fileID: 603314044}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -352.2, y: 274}
-  m_SizeDelta: {x: 384.97, y: 30}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 50, y: -50}
+  m_SizeDelta: {x: 500, y: 100}
+  m_Pivot: {x: 0, y: 1}
 --- !u!114 &1413548743
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -24,6 +24,9 @@ namespace Losk.Trail
 
     }
 
+    /// <summary>
+    /// 空間分割法用のセル用構造体
+    /// </summary>
     public struct CellStartEnd
     {
         public int startIdx;
@@ -46,41 +49,39 @@ namespace Losk.Trail
         public ComputeBuffer _cellStartEndBuffer;   // 空間分割法におけるセルの最初と最後を詰めておくバッファ
         public ComputeBuffer _particleIdBuffer;     // パーティクルのソートによってトレイルがぐちゃぐちゃになるのを防ぐバッファ
 
-        /// <summary>
-        /// パーティクルの数
-        /// </summary>
-        public int _particleNum = 100;
-        public int ParticleNum { get{ return _particleNum; } set { value = _particleNum; } }
-        public float initRadius = 20f;
-        public float _gatherPower = 0.1f;
-        public float _wallStiffness = 1.0f;
+        [Header("シミュレーション設定")]
+        public int _particleNum = 100;              // パーティクル数
+        public float initRadius = 20f;              // パーティクルの初期設置半径
+        public float _gatherPower = 0.1f;           // マウスインタラクション用
+        public float _wallStiffness = 1.0f;         // 壁係数
 
-        public Vector3 _spaceMin;
-        public Vector3 _spaceMax;
-        public Vector3 _gravity;
+        public Vector3 _spaceMin;                   // シミュレーション空間最小座標
+        public Vector3 _spaceMax;                   // シミュレーション空間最大座標
+        public Vector3 _gravity;                    // 重力
 
         /// <summary>
         /// シミュレーション用パラメータ
         /// </summary>
-        public float _effectiveRadius = 0.2f;      // 有効半径
+
         public float _mass = 0.02f;                 // 質量
+        public float _density = 998.29f;            // 初期密度
+        public float _dt = 0.005f;                  // タイムステップ幅
+        public float _viscosity = 0.001f;           // 粘性係数
+        public float _kernelParticles = 20.0f;      // カーネル内のパーティクル数
 
-        public float _density = 998.29f;
-        public float _dt = 0.005f;
-        public float _viscosity = 0.001f;
-        public float _kernelParticles = 20.0f;
-
-        private float _volume;
-        private float _particleRadius;
+        private float _effectiveRadius = 0.2f;      // 有効半径
+        private float _volume;                      // カーネルパーティクル分の体積
+        private float _particleRadius;              
 
         /// <summary>
         /// PBF用パラメータ
         /// </summary>
-        public float _epsilon = 0.001f;      // CFMの緩和係数
-        public float _densFluctuation = 0.05f;  // 密度変動率
-        public int _minIterations = 2;          // 最小ヤコビ反復回数
-        public int _maxIterations = 10;         // 最大ヤコビ反復回数
-        public bool _useArtificialPressure = true;  // 人工圧力
+        [Header("PBF用パラメータ")]
+        public float _epsilon = 0.001f;             // CFMの緩和係数
+        public float _densFluctuation = 0.05f;      // 密度変動率
+        public int _minIterations = 2;              // 最小ヤコビ反復回数
+        public int _maxIterations = 10;             // 最大ヤコビ反復回数
+        public bool _useArtificialPressure = true;  // 人工圧力の有無
         public float _ap_k = 0.1f;                  // 人工圧力係数k
         public float _ap_n = 4.0f;                  // 人工圧力係数n
         public float _ap_q = 0.2f;                  // 人工圧力係数q
@@ -97,7 +98,7 @@ namespace Losk.Trail
         /// <returns></returns>
         private Vector3Int _groupNum = new Vector3Int(1, 1, 1);
 
-        private const int THREAD_NUM_x = 256;
+        private const int THREAD_NUM_X = 256;
 
         
         /// <summary>
@@ -115,7 +116,7 @@ namespace Losk.Trail
             _particleRadius = Mathf.Pow((Mathf.PI / (6.0f * _kernelParticles)), 1f / 3f) * _effectiveRadius;
 
             // グループ数計算
-            _groupNum.x = Mathf.CeilToInt(_particleNum / THREAD_NUM_x) + 1;
+            _groupNum.x = Mathf.CeilToInt(_particleNum / THREAD_NUM_X) + 1;
 
             // カーネル関数の係数部分定義
             _particleComputeShader.SetFloat(CS_NAMES.WPOLY6, 315f / (64f * Mathf.PI * Mathf.Pow(_effectiveRadius, 9f)));
@@ -213,21 +214,21 @@ namespace Losk.Trail
             _particleComputeShader.SetBool(CS_NAMES.IS_COLLISION_ONLY_IN_INTEGRATE, false);
             Integrate();
 
-            // 位置修正反復
+            // 位置修正反復 
             int iter = 0;           // 反復回数
             float densVar = 1.0f;   // 密度の分散
-            while (((densVar > _densFluctuation) || (iter < _minIterations)) && (iter < _maxIterations)) {
+            while ((densVar > _densFluctuation || iter < _minIterations) && (iter <= _maxIterations)) {
                 // ハッシュ値の計算
                 ComputeHash();
 
-                ComputeScalingFactor();         // caluculate λ_i
-                ComputePositionCorrection();    // caluculate Δp_i
+                ComputeScalingFactor();         // "caluculate λ_i"
+                ComputePositionCorrection();    // "caluculate Δp_i"
 
                 // 衝突処理のみ行う
                 _particleComputeShader.SetBool(CS_NAMES.IS_COLLISION_ONLY_IN_INTEGRATE, true);
-                Integrate();    // perform collision detection and response
+                Integrate();    // "perform collision detection and response"
 
-                ApplyPositionCorrection();  // update position x*_i <= x*_i + Δp_i
+                ApplyPositionCorrection();  // "update position x*_i <= x*_i + Δp_i"
 
                 densVar = ComputeDensityFluctuation();
 
@@ -353,7 +354,7 @@ namespace Losk.Trail
         }
 
         /// <summary>
-        /// 平均密度変動率を計算 (exclusive scanがないので現状こうなっている)
+        /// 平均密度変動率を計算
         /// </summary>
         /// <returns></returns>
         float ComputeDensityFluctuation()
@@ -412,7 +413,7 @@ namespace Losk.Trail
                     _particleComputeShader.SetInt(CS_NAMES.DIR, 2 << i);
                     _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
                     _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
-                    _particleComputeShader.Dispatch(kernelIdx, _particleNum / B_index /THREAD_NUM_x, _groupNum.y, _groupNum.z);
+                    _particleComputeShader.Dispatch(kernelIdx, _particleNum / B_index /THREAD_NUM_X, _groupNum.y, _groupNum.z);
                     _particleBuffer.Swap();
                     inc /= B_index;
                 }
