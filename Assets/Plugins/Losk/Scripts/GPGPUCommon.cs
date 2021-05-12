@@ -56,6 +56,8 @@ namespace Losk
                 VariableIndexes.iOutputId = Shader.PropertyToID("_iOutput");
                 VariableIndexes.fInputId = Shader.PropertyToID("_fInput");
                 VariableIndexes.fOutputId = Shader.PropertyToID("_fOutput");
+
+                _isInitialized = true;
             }
         }
 

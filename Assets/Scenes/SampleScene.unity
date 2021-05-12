@@ -593,7 +593,7 @@ MonoBehaviour:
   _epsilon: 60
   _densFluctuation: 0.016
   _minIterations: 1
-  _maxIterations: 2
+  _maxIterations: 4
   _useArtificialPressure: 1
   _ap_k: 0.1
   _ap_n: 4
