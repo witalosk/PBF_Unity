@@ -1,3 +1,4 @@
+#pragma kernel ComputeSourceAndDestination
 #pragma kernel ComputeDensity
 #pragma kernel ComputeExternalForces
 #pragma kernel Integrate
@@ -18,20 +19,34 @@ struct CellStartEnd
 	int endIdx;
 };
 
+struct FluidCollider
+{
+	float3 colliderMin;
+	float3 colliderMax;
+};
+
 RWStructuredBuffer<Particle> _particleReadBuffer;
 RWStructuredBuffer<Particle> _particleWriteBuffer;
 RWStructuredBuffer<float> _fOutputBuffer;
 RWStructuredBuffer<CellStartEnd> _cellStartEndBuffer;
 RWStructuredBuffer<int> _particleIdBuffer;
+RWStructuredBuffer<FluidCollider> _fluidColliderBuffer;
 
 uint _particleNum;
 float _time;
 float _gatherPower; // マウスインタラクションの強度
 float4 _mousePos;
 bool _isCollisionOnlyInIntegrate;	// Integrateカーネルで衝突のみにするかどうか
+int _fluidColliderNum;		// 障害物の数
 
 float4 _spaceMin;
 float4 _spaceMax;
+float3 _sourceMin;
+float3 _sourceMax;
+float3 _destinationMin;
+float3 _destinationMax;
+float3 _initVelocity;
+
 float4 _gravity;
 float _effectiveRadius;		// 有効半径
 float _mass;				// 質量
@@ -57,14 +72,53 @@ float _wpoly6, _gWpoly6, _lWpoly6;
 float _wspiky, _gWspiky, _lWspiky;
 float _wvisc, _gWvisc, _lWvisc;
 
+// 乱数
+float Rand(float2 co){
+    return frac(sin(dot(co.xy, float2(12.9898,78.233))) * 43758.5453);
+}
+
 // 位置座標 → セル座標
 uint3 PositionToCell(float3 pos)
 {
 	float3 units = (_spaceMax.xyz - _spaceMin.xyz) / (float3)_nnSearchDivNum;
-	uint3 coor = ((clamp(pos, _spaceMin.xyz, _spaceMax.xyz-0.0001) - _spaceMin.xyz) / units);
+	uint3 coor = ((clamp(pos, _spaceMin.xyz, _spaceMax.xyz - 0.0001) - _spaceMin.xyz) / units);
 
 	return coor;
 }
+
+// 領域にパーティクルが含まれているかどうか
+bool IsIncludeArea(float3 pos, float3 min, float3 max)
+{
+	return min.x <= pos.x && pos.x <= max.x && min.y <= pos.y && pos.y <= max.y && min.z <= pos.z && pos.z <= max.z; 
+}
+
+// 領域内のランダムな点を返す
+float3 RandomInArea(float2 co, float3 min, float3 max)
+{
+	return float3(Rand(co) * (max.x - min.x) + min.x, Rand(co + float2(1,1)) * (max.y - min.y) + min.y, Rand(co + float2(2,2)) * (max.z - min.z) + min.z);
+}
+
+// 流入と流出の処理
+[numthreads(256, 1, 1)]
+void ComputeSourceAndDestination(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+
+	if (prt.hash == _nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z) {
+		prt.pos = RandomInArea(prt.pos + prt.vel, _sourceMin, _sourceMax);
+		prt.prevPos = prt.pos;
+		prt.vel = _initVelocity;
+		prt.hash =  0;
+	}
+	else if (IsIncludeArea(prt.pos, _destinationMin, _destinationMax)) {
+		prt.hash = _nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z;
+	}
+
+	_particleWriteBuffer[index] = prt;
+}
+
 
 // 密度計算
 [numthreads(256, 1, 1)]
@@ -156,7 +210,7 @@ void ComputeExternalForces(uint3 id : SV_DispatchThreadId)
 }
 
 // 境界処理
-void ComputeRepulsion(Particle particle, out float3 opos, out float3 ovel)
+void ComputeRepulsion(Particle particle, float3 min, float3 max, out float3 opos, out float3 ovel)
 {
 	float dist;
 	float3 closestPoint; 	// 最近傍点
@@ -164,51 +218,116 @@ void ComputeRepulsion(Particle particle, out float3 opos, out float3 ovel)
 	float3 n;				// 法線
 
 	// X(-)境界
-	closestPoint = float3(_spaceMin.x, particle.pos.yz);
-	closestDist = _spaceMin.x - particle.pos.x;
+	closestPoint = float3(min.x, particle.pos.yz);
+	closestDist = min.x - particle.pos.x;
 	n = float3(1, 0, 0);
 	
 	// X(+)境界
-	dist = particle.pos.x - _spaceMax.x;
+	dist = particle.pos.x - max.x;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(_spaceMax.x, particle.pos.yz);
+		closestPoint = float3(max.x, particle.pos.yz);
 		n = float3(-1, 0, 0);
 	}
 
 	// Y(-)境界
-	dist = _spaceMin.y - particle.pos.y;
+	dist = min.y - particle.pos.y;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.x, _spaceMin.y, particle.pos.z);
+		closestPoint = float3(particle.pos.x, min.y, particle.pos.z);
 		n = float3(0, 1, 0);
 	}
 
 	// Y(+)境界
-	dist = particle.pos.y - _spaceMax.y;
+	dist = particle.pos.y - max.y;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.x, _spaceMax.y, particle.pos.z);
+		closestPoint = float3(particle.pos.x, max.y, particle.pos.z);
 		n = float3(0, -1, 0);
 	}
 
 	// Z(-)境界
-	dist = _spaceMin.z - particle.pos.z;
+	dist = min.z - particle.pos.z;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.xy, _spaceMin.z);
+		closestPoint = float3(particle.pos.xy, min.z);
 		n = float3(0, 0, 1);
 	}
 
 	// Z(+)境界
-	dist = particle.pos.z - _spaceMax.z;
+	dist = particle.pos.z - max.z;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.xy, _spaceMax.z);
+		closestPoint = float3(particle.pos.xy, max.z);
 		n = float3(0, 0, -1);
 	}
 
 	if (closestDist > 0.0) {
+		float res = _wallStiffness;
+		res = (res > 0.0) ? (res * abs(closestDist) / (_dt * length(particle.vel))) : 0.0;
+		ovel = particle.vel - (1.0 + res) * n * dot(n, particle.vel);
+		opos = closestPoint;
+	}
+	else {
+		ovel = particle.vel;
+		opos = particle.pos;
+	}
+}
+
+// Boxの境界処理
+void ComputeBoxRepulsion(Particle particle, float3 min, float3 max, out float3 opos, out float3 ovel)
+{
+	float dist;
+	float3 closestPoint; 	// 最近傍点
+	float closestDist;		// 最近傍点までの距離
+	float3 n;				// 法線
+
+	// X(-)境界
+	closestPoint = float3(min.x, particle.pos.yz);
+	closestDist = min.x - particle.pos.x;
+	n = float3(1, 0, 0);
+	
+	// X(+)境界
+	dist = particle.pos.x - max.x;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(max.x, particle.pos.yz);
+		n = float3(-1, 0, 0);
+	}
+
+	// Y(-)境界
+	dist = min.y - particle.pos.y;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.x, min.y, particle.pos.z);
+		n = float3(0, 1, 0);
+	}
+
+	// Y(+)境界
+	dist = particle.pos.y - max.y;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.x, max.y, particle.pos.z);
+		n = float3(0, -1, 0);
+	}
+
+	// Z(-)境界
+	dist = min.z - particle.pos.z;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.xy, min.z);
+		n = float3(0, 0, 1);
+	}
+
+	// Z(+)境界
+	dist = particle.pos.z - max.z;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.xy, max.z);
+		n = float3(0, 0, -1);
+	}
+
+	if (closestDist < 0.0) {
 		float res = _wallStiffness;
 		res = (res > 0.0) ? (res * abs(closestDist) / (_dt * length(particle.vel))) : 0.0;
 		ovel = particle.vel - (1.0 + res) * n * dot(n, particle.vel);
@@ -231,18 +350,22 @@ void Integrate(uint3 id : SV_DispatchThreadID)
 
 	float effectiveRange = 0.0;
 
-	particle.acc = particle.force;
-
 	// 境界条件
 	float3 opos, ovel;
-	ComputeRepulsion(particle, opos, ovel);
+	ComputeRepulsion(particle, _spaceMin, _spaceMax, opos, ovel);
 	particle.pos = opos;
 	particle.vel = ovel;
+
+	for (uint i = 0; i < _fluidColliderNum; i++) {
+		ComputeBoxRepulsion(particle, _fluidColliderBuffer[i].colliderMin, _fluidColliderBuffer[i].colliderMax, opos, ovel);
+		particle.pos = opos;
+		particle.vel = ovel;
+	}
 
 	if (!_isCollisionOnlyInIntegrate) {
 		particle.prevPos = particle.pos;
 
-		particle.vel += particle.acc * _dt;
+		particle.vel += particle.force * _dt;
 		particle.pos += particle.vel * _dt;
 	}
 
@@ -424,7 +547,12 @@ void ComputeHash(uint3 id : SV_DispatchThreadID)
 	uint index = id.x;
 	if (index >= _particleNum) return;
 	Particle prt = _particleReadBuffer[index];
-	
+
+	if (prt.hash >= _nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z) {
+		_particleWriteBuffer[index] = prt;
+		return;
+	}
+
 	int3 coor = PositionToCell(prt.pos);
 
 	prt.hash = coor.x + coor.y * _nnSearchDivNum.x + coor.z * _nnSearchDivNum.x * _nnSearchDivNum.y;

@@ -20,6 +20,13 @@ namespace Losk.Trail
         public const string MOUSE_POS = "_mousePos";
         public const string SPACE_MIN = "_spaceMin";
         public const string SPACE_MAX = "_spaceMax";
+        public const string SOURCE_MIN = "_sourceMin";
+        public const string SOURCE_MAX = "_sourceMax";
+        public const string DESTINATION_MIN = "_destinationMin";
+        public const string DESTINATION_MAX = "_destinationMax";
+        public const string INIT_VELOCITY = "_initVelocity";
+        public const string FLUID_COLLIDER_NUM = "_fluidColliderNum";
+
         public const string GRAVITY = "_gravity";
         public const string EFFECTIVE_RADIUS = "_effectiveRadius";
         public const string MASS = "_mass";
@@ -35,6 +42,7 @@ namespace Losk.Trail
         public const string IS_COLLISION_ONLY_IN_INTEGRATE = "_isCollisionOnlyInIntegrate";
         public const string WALL_STIFFNESS = "_wallStiffness";
         public const string NNSEARCH_DIM = "_nnSearchDivNum";
+        public const string INVISIBLE_HASH = "_invisibleHash";
         public const string INC = "_inc";
         public const string DIR = "_dir";
 
@@ -59,6 +67,7 @@ namespace Losk.Trail
         public const string NODE_BUFFER = "_nodeBuffer";
         public const string CELL_START_END_BUFFER = "_cellStartEndBuffer";
         public const string PARTICLE_ID_BUFFER = "_particleIdBuffer";
+        public const string FLUID_COLLIDER_BUFFER = "_fluidColliderBuffer";
 
 
         // カーネル名
@@ -74,6 +83,7 @@ namespace Losk.Trail
         public const string COMPUTE_HASH_KERNEL = "ComputeHash";
         public const string BIOTONIC_SORT_KERNEL = "ParallelBitonicParticle";
         public const string COMPUTE_CELL_START_END_KERNEL = "ComputeCellStartEnd";
+        public const string COMPUTE_SOURCE_AND_DESTINATION = "ComputeSourceAndDestination";
     }
 
 }
