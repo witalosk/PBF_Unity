@@ -1,3 +1,4 @@
+#pragma kernel ComputeSourceAndDestination
 #pragma kernel ComputeDensity
 #pragma kernel ComputeExternalForces
 #pragma kernel Integrate
@@ -32,6 +33,12 @@ bool _isCollisionOnlyInIntegrate;	// Integrateカーネルで衝突のみにす�
 
 float4 _spaceMin;
 float4 _spaceMax;
+float3 _sourceMin;
+float3 _sourceMax;
+float3 _destinationMin;
+float3 _destinationMax;
+float3 _initVelocity;
+
 float4 _gravity;
 float _effectiveRadius;		// 有効半径
 float _mass;				// 質量
@@ -57,6 +64,11 @@ float _wpoly6, _gWpoly6, _lWpoly6;
 float _wspiky, _gWspiky, _lWspiky;
 float _wvisc, _gWvisc, _lWvisc;
 
+// 乱数
+float Rand(float2 co){
+    return frac(sin(dot(co.xy, float2(12.9898,78.233))) * 43758.5453);
+}
+
 // 位置座標 → セル座標
 uint3 PositionToCell(float3 pos)
 {
@@ -65,6 +77,36 @@ uint3 PositionToCell(float3 pos)
 
 	return coor;
 }
+
+// 領域にパーティクルが含まれているかどうか
+bool IsIncludeArea(float3 pos, float3 min, float3 max)
+{
+	return min.x <= pos.x && pos.x <= max.x && min.y <= pos.y && pos.y <= max.y && min.z <= pos.z && pos.z <= max.z; 
+}
+
+// 領域内のランダムな点を返す
+float3 RandomInArea(float2 co, float3 min, float3 max)
+{
+	return float3(Rand(co) * (max.x - min.x) + min.x, Rand(co + float2(1,1)) * (max.y - min.y) + min.y, Rand(co + float2(2,2)) * (max.z - min.z) + min.z);
+}
+
+// 流入と流出の処理
+[numthreads(256, 1, 1)]
+void ComputeSourceAndDestination(uint3 id : SV_DispatchThreadID)
+{
+	uint index = id.x;
+	if (index >= _particleNum) return;
+	Particle prt = _particleReadBuffer[index];
+
+	if (IsIncludeArea(prt.pos, _destinationMin, _destinationMax)) {
+		prt.pos = RandomInArea(prt.pos + prt.vel, _sourceMin, _sourceMax);
+		prt.prevPos = prt.pos;
+		prt.vel = _initVelocity;
+	}
+
+	_particleWriteBuffer[index] = prt;
+}
+
 
 // 密度計算
 [numthreads(256, 1, 1)]

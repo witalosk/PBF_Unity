@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Runtime.InteropServices;
 using System.Linq;
+using Losk.Fluid.FluidObjects;
 
 namespace Losk.Trail
 {
@@ -92,6 +93,14 @@ namespace Losk.Trail
         public Vector3Int _nnSearchDivNum = new Vector3Int(10, 10, 10);
 
 
+        [SerializeField, Header("References")]
+        FluidSource _fluidSource;                   // 流体源, TODO: 複数対応
+        
+        [SerializeField]
+        FluidDestination _fluidDestination;         // 流体出口, TODO: 複数対応
+
+
+
         /// <summary>
         /// groupの数
         /// </summary>
@@ -104,7 +113,7 @@ namespace Losk.Trail
         /// <summary>
         /// 初期化処理
         /// </summary>
-        void Start()
+        private void Start()
         {
             // パーティクル数を2の累乗に丸める(BiotonicSort用)
             int r = Mathf.CeilToInt(Mathf.Log(_particleNum, 2));
@@ -139,8 +148,8 @@ namespace Losk.Trail
                 Enumerable.Range(0, _particleNum)
                 .Select(_ => new Particle() { 
                     index = _,
-                    pos = Random.insideUnitSphere * initRadius, 
-                    vel = Vector3.zero,
+                    pos = _fluidSource.GetRandomPositionInArea(),
+                    vel = _fluidSource._initVelocity,
                     acc = Vector3.zero,
                     dens = 0.0f,
                     force = Vector3.zero,
@@ -169,6 +178,19 @@ namespace Losk.Trail
                 Enumerable.Range(0, _particleNum).ToArray()
             );
 
+            SetParameters();
+        }
+
+        /// <summary>
+        /// GPUパラメータを設定
+        /// </summary>
+        private void SetParameters()
+        {
+            _particleComputeShader.SetInt(CS_NAMES.PARTICLE_NUM, _particleNum);
+            _particleComputeShader.SetFloat(CS_NAMES.TIME, Time.time);
+            _particleComputeShader.SetFloat(CS_NAMES.GATHER_POWER, _gatherPower);
+            _particleComputeShader.SetFloat(CS_NAMES.DT, _dt);
+
             _particleComputeShader.SetVector(CS_NAMES.GRAVITY, _gravity);
             _particleComputeShader.SetFloat(CS_NAMES.EFFECTIVE_RADIUS, _effectiveRadius);
             _particleComputeShader.SetFloat(CS_NAMES.MASS, _mass);
@@ -184,6 +206,11 @@ namespace Losk.Trail
 
             _particleComputeShader.SetVector(CS_NAMES.SPACE_MIN, _spaceMin);
             _particleComputeShader.SetVector(CS_NAMES.SPACE_MAX, _spaceMax);
+            _particleComputeShader.SetVector(CS_NAMES.SOURCE_MIN, _fluidSource.GetMin());
+            _particleComputeShader.SetVector(CS_NAMES.SOURCE_MAX, _fluidSource.GetMax());
+            _particleComputeShader.SetVector(CS_NAMES.DESTINATION_MIN, _fluidDestination.GetMin());
+            _particleComputeShader.SetVector(CS_NAMES.DESTINATION_MAX, _fluidDestination.GetMax());
+            _particleComputeShader.SetVector(CS_NAMES.INIT_VELOCITY, _fluidSource._initVelocity);
             _particleComputeShader.SetVector(CS_NAMES.MOUSE_POS, new Vector4(-1000.0f, -1000.0f, -1000.0f, 0f));
 
             _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, new int[]{_nnSearchDivNum.x, _nnSearchDivNum.y, _nnSearchDivNum.z});
@@ -194,12 +221,11 @@ namespace Losk.Trail
         /// </summary>
         public void LocalUpdate()
         {
-            _particleComputeShader.SetInt(CS_NAMES.PARTICLE_NUM, _particleNum);
-            _particleComputeShader.SetFloat(CS_NAMES.TIME, Time.time);
-            _particleComputeShader.SetFloat(CS_NAMES.GATHER_POWER, _gatherPower);
-            _particleComputeShader.SetFloat(CS_NAMES.DT, _dt);
+            SetParameters();
 
-            // ここからメインループ
+            ComputeSourceAndDestination();
+
+            // ここからシミュレーションメインループ
 
             // ハッシュ値の計算
             ComputeHash();
@@ -265,6 +291,18 @@ namespace Losk.Trail
             else{
                 return 0.0f;
             }
+        }
+
+        /// <summary>
+        /// パーティクルの流入と流出の処理
+        /// </summary>
+        void ComputeSourceAndDestination()
+        {
+            int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_SOURCE_AND_DESTINATION);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
+            _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_WRITE_BUFFER, _particleBuffer.Other);
+            _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
+            _particleBuffer.Swap();
         }
 
         /// <summary>
@@ -427,6 +465,14 @@ namespace Losk.Trail
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_ID_BUFFER, _particleIdBuffer);
             _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
         }
-    }
 
+            void OnDrawGizmos()
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawWireCube((_spaceMin + _spaceMax) * 0.5f, (_spaceMax - _spaceMin));
+#if UNITY_EDITOR
+                UnityEditor.Handles.Label(_spaceMin, "Simulation Area");
+#endif
+            }
+    }
 }

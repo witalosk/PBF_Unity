@@ -20,6 +20,12 @@ namespace Losk.Trail
         public const string MOUSE_POS = "_mousePos";
         public const string SPACE_MIN = "_spaceMin";
         public const string SPACE_MAX = "_spaceMax";
+        public const string SOURCE_MIN = "_sourceMin";
+        public const string SOURCE_MAX = "_sourceMax";
+        public const string DESTINATION_MIN = "_destinationMin";
+        public const string DESTINATION_MAX = "_destinationMax";
+        public const string INIT_VELOCITY = "_initVelocity";
+
         public const string GRAVITY = "_gravity";
         public const string EFFECTIVE_RADIUS = "_effectiveRadius";
         public const string MASS = "_mass";
@@ -74,6 +80,7 @@ namespace Losk.Trail
         public const string COMPUTE_HASH_KERNEL = "ComputeHash";
         public const string BIOTONIC_SORT_KERNEL = "ParallelBitonicParticle";
         public const string COMPUTE_CELL_START_END_KERNEL = "ComputeCellStartEnd";
+        public const string COMPUTE_SOURCE_AND_DESTINATION = "ComputeSourceAndDestination";
     }
 
 }
