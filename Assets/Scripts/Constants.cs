@@ -25,6 +25,7 @@ namespace Losk.Trail
         public const string DESTINATION_MIN = "_destinationMin";
         public const string DESTINATION_MAX = "_destinationMax";
         public const string INIT_VELOCITY = "_initVelocity";
+        public const string FLUID_COLLIDER_NUM = "_fluidColliderNum";
 
         public const string GRAVITY = "_gravity";
         public const string EFFECTIVE_RADIUS = "_effectiveRadius";
@@ -66,6 +67,7 @@ namespace Losk.Trail
         public const string NODE_BUFFER = "_nodeBuffer";
         public const string CELL_START_END_BUFFER = "_cellStartEndBuffer";
         public const string PARTICLE_ID_BUFFER = "_particleIdBuffer";
+        public const string FLUID_COLLIDER_BUFFER = "_fluidColliderBuffer";
 
 
         // カーネル名

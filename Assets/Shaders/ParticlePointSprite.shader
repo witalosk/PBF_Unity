@@ -50,11 +50,6 @@ Shader "Custom/ParticlePointSprite"
                 // o.color.r = (float)(_particleBuffer[instanceId].hash % 10) / 10.0;
                 // o.color.g = (float)((_particleBuffer[instanceId].hash / 10) % 10) / 10.0;
                 // o.color.b = (float)(_particleBuffer[instanceId].hash / 1000) / 10.0;
-                if (_particleBuffer[instanceId].hash >= 216) {
-                    o.color.r = 1;
-                    o.color.g = 0;
-                    o.color.b = 0;
-                }
                 return o;
             }
 

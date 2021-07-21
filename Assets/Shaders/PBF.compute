@@ -19,17 +19,25 @@ struct CellStartEnd
 	int endIdx;
 };
 
+struct FluidCollider
+{
+	float3 colliderMin;
+	float3 colliderMax;
+};
+
 RWStructuredBuffer<Particle> _particleReadBuffer;
 RWStructuredBuffer<Particle> _particleWriteBuffer;
 RWStructuredBuffer<float> _fOutputBuffer;
 RWStructuredBuffer<CellStartEnd> _cellStartEndBuffer;
 RWStructuredBuffer<int> _particleIdBuffer;
+RWStructuredBuffer<FluidCollider> _fluidColliderBuffer;
 
 uint _particleNum;
 float _time;
 float _gatherPower; // マウスインタラクションの強度
 float4 _mousePos;
 bool _isCollisionOnlyInIntegrate;	// Integrateカーネルで衝突のみにするかどうか
+int _fluidColliderNum;		// 障害物の数
 
 float4 _spaceMin;
 float4 _spaceMax;
@@ -202,7 +210,7 @@ void ComputeExternalForces(uint3 id : SV_DispatchThreadId)
 }
 
 // 境界処理
-void ComputeRepulsion(Particle particle, out float3 opos, out float3 ovel)
+void ComputeRepulsion(Particle particle, float3 min, float3 max, out float3 opos, out float3 ovel)
 {
 	float dist;
 	float3 closestPoint; 	// 最近傍点
@@ -210,51 +218,116 @@ void ComputeRepulsion(Particle particle, out float3 opos, out float3 ovel)
 	float3 n;				// 法線
 
 	// X(-)境界
-	closestPoint = float3(_spaceMin.x, particle.pos.yz);
-	closestDist = _spaceMin.x - particle.pos.x;
+	closestPoint = float3(min.x, particle.pos.yz);
+	closestDist = min.x - particle.pos.x;
 	n = float3(1, 0, 0);
 	
 	// X(+)境界
-	dist = particle.pos.x - _spaceMax.x;
+	dist = particle.pos.x - max.x;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(_spaceMax.x, particle.pos.yz);
+		closestPoint = float3(max.x, particle.pos.yz);
 		n = float3(-1, 0, 0);
 	}
 
 	// Y(-)境界
-	dist = _spaceMin.y - particle.pos.y;
+	dist = min.y - particle.pos.y;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.x, _spaceMin.y, particle.pos.z);
+		closestPoint = float3(particle.pos.x, min.y, particle.pos.z);
 		n = float3(0, 1, 0);
 	}
 
 	// Y(+)境界
-	dist = particle.pos.y - _spaceMax.y;
+	dist = particle.pos.y - max.y;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.x, _spaceMax.y, particle.pos.z);
+		closestPoint = float3(particle.pos.x, max.y, particle.pos.z);
 		n = float3(0, -1, 0);
 	}
 
 	// Z(-)境界
-	dist = _spaceMin.z - particle.pos.z;
+	dist = min.z - particle.pos.z;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.xy, _spaceMin.z);
+		closestPoint = float3(particle.pos.xy, min.z);
 		n = float3(0, 0, 1);
 	}
 
 	// Z(+)境界
-	dist = particle.pos.z - _spaceMax.z;
+	dist = particle.pos.z - max.z;
 	if (dist > closestDist) {
 		closestDist = dist;
-		closestPoint = float3(particle.pos.xy, _spaceMax.z);
+		closestPoint = float3(particle.pos.xy, max.z);
 		n = float3(0, 0, -1);
 	}
 
 	if (closestDist > 0.0) {
+		float res = _wallStiffness;
+		res = (res > 0.0) ? (res * abs(closestDist) / (_dt * length(particle.vel))) : 0.0;
+		ovel = particle.vel - (1.0 + res) * n * dot(n, particle.vel);
+		opos = closestPoint;
+	}
+	else {
+		ovel = particle.vel;
+		opos = particle.pos;
+	}
+}
+
+// Boxの境界処理
+void ComputeBoxRepulsion(Particle particle, float3 min, float3 max, out float3 opos, out float3 ovel)
+{
+	float dist;
+	float3 closestPoint; 	// 最近傍点
+	float closestDist;		// 最近傍点までの距離
+	float3 n;				// 法線
+
+	// X(-)境界
+	closestPoint = float3(min.x, particle.pos.yz);
+	closestDist = min.x - particle.pos.x;
+	n = float3(1, 0, 0);
+	
+	// X(+)境界
+	dist = particle.pos.x - max.x;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(max.x, particle.pos.yz);
+		n = float3(-1, 0, 0);
+	}
+
+	// Y(-)境界
+	dist = min.y - particle.pos.y;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.x, min.y, particle.pos.z);
+		n = float3(0, 1, 0);
+	}
+
+	// Y(+)境界
+	dist = particle.pos.y - max.y;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.x, max.y, particle.pos.z);
+		n = float3(0, -1, 0);
+	}
+
+	// Z(-)境界
+	dist = min.z - particle.pos.z;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.xy, min.z);
+		n = float3(0, 0, 1);
+	}
+
+	// Z(+)境界
+	dist = particle.pos.z - max.z;
+	if (dist > closestDist) {
+		closestDist = dist;
+		closestPoint = float3(particle.pos.xy, max.z);
+		n = float3(0, 0, -1);
+	}
+
+	if (closestDist < 0.0) {
 		float res = _wallStiffness;
 		res = (res > 0.0) ? (res * abs(closestDist) / (_dt * length(particle.vel))) : 0.0;
 		ovel = particle.vel - (1.0 + res) * n * dot(n, particle.vel);
@@ -277,18 +350,22 @@ void Integrate(uint3 id : SV_DispatchThreadID)
 
 	float effectiveRange = 0.0;
 
-	particle.acc = particle.force;
-
 	// 境界条件
 	float3 opos, ovel;
-	ComputeRepulsion(particle, opos, ovel);
+	ComputeRepulsion(particle, _spaceMin, _spaceMax, opos, ovel);
 	particle.pos = opos;
 	particle.vel = ovel;
+
+	for (uint i = 0; i < _fluidColliderNum; i++) {
+		ComputeBoxRepulsion(particle, _fluidColliderBuffer[i].colliderMin, _fluidColliderBuffer[i].colliderMax, opos, ovel);
+		particle.pos = opos;
+		particle.vel = ovel;
+	}
 
 	if (!_isCollisionOnlyInIntegrate) {
 		particle.prevPos = particle.pos;
 
-		particle.vel += particle.acc * _dt;
+		particle.vel += particle.force * _dt;
 		particle.pos += particle.vel * _dt;
 	}
 
