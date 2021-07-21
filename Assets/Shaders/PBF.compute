@@ -73,7 +73,7 @@ float Rand(float2 co){
 uint3 PositionToCell(float3 pos)
 {
 	float3 units = (_spaceMax.xyz - _spaceMin.xyz) / (float3)_nnSearchDivNum;
-	uint3 coor = ((clamp(pos, _spaceMin.xyz, _spaceMax.xyz-0.0001) - _spaceMin.xyz) / units);
+	uint3 coor = ((clamp(pos, _spaceMin.xyz, _spaceMax.xyz - 0.0001) - _spaceMin.xyz) / units);
 
 	return coor;
 }
@@ -98,10 +98,14 @@ void ComputeSourceAndDestination(uint3 id : SV_DispatchThreadID)
 	if (index >= _particleNum) return;
 	Particle prt = _particleReadBuffer[index];
 
-	if (IsIncludeArea(prt.pos, _destinationMin, _destinationMax)) {
+	if (prt.hash == _nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z) {
 		prt.pos = RandomInArea(prt.pos + prt.vel, _sourceMin, _sourceMax);
 		prt.prevPos = prt.pos;
 		prt.vel = _initVelocity;
+		prt.hash =  0;
+	}
+	else if (IsIncludeArea(prt.pos, _destinationMin, _destinationMax)) {
+		prt.hash = _nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z;
 	}
 
 	_particleWriteBuffer[index] = prt;
@@ -466,7 +470,12 @@ void ComputeHash(uint3 id : SV_DispatchThreadID)
 	uint index = id.x;
 	if (index >= _particleNum) return;
 	Particle prt = _particleReadBuffer[index];
-	
+
+	if (prt.hash >= _nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z) {
+		_particleWriteBuffer[index] = prt;
+		return;
+	}
+
 	int3 coor = PositionToCell(prt.pos);
 
 	prt.hash = coor.x + coor.y * _nnSearchDivNum.x + coor.z * _nnSearchDivNum.x * _nnSearchDivNum.y;

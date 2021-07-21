@@ -574,27 +574,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _particleComputeShader: {fileID: 7200000, guid: a7788284607c608469a62a2b852285bb, type: 3}
-  _particleNum: 4096
+  _particleNum: 16000
   initRadius: 0.4
   _gatherPower: 5.32
   _wallStiffness: 0.01
   _spaceMin: {x: -1, y: -0.5, z: -1}
-  _spaceMax: {x: 0.5, y: 1, z: 0.5}
+  _spaceMax: {x: 1, y: 1, z: 1}
   _gravity: {x: 0, y: -9.8, z: 0}
   _mass: 0.1
   _density: 997
-  _dt: 0.008
+  _dt: 0.016
   _viscosity: 0.001
   _kernelParticles: 20
   _epsilon: 60
   _densFluctuation: 0.016
   _minIterations: 1
-  _maxIterations: 4
+  _maxIterations: 10
   _useArtificialPressure: 1
   _ap_k: 0.1
   _ap_n: 4
   _ap_q: 0.2
-  _nnSearchDivNum: {x: 4, y: 4, z: 4}
+  _nnSearchDivNum: {x: 12, y: 12, z: 12}
   _fluidSource: {fileID: 200918303}
   _fluidDestination: {fileID: 663899326}
 --- !u!4 &1226800648

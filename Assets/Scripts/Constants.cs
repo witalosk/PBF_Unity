@@ -41,6 +41,7 @@ namespace Losk.Trail
         public const string IS_COLLISION_ONLY_IN_INTEGRATE = "_isCollisionOnlyInIntegrate";
         public const string WALL_STIFFNESS = "_wallStiffness";
         public const string NNSEARCH_DIM = "_nnSearchDivNum";
+        public const string INVISIBLE_HASH = "_invisibleHash";
         public const string INC = "_inc";
         public const string DIR = "_dir";
 

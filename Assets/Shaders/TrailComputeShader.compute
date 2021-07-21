@@ -6,6 +6,7 @@
 float _time;
 float _updateDistanceMin;
 uint _particleNum;
+int _invisibleHash;
 
 RWStructuredBuffer<Trail> _trailBuffer;
 RWStructuredBuffer<Node> _nodeBuffer;
@@ -47,6 +48,7 @@ void CalcInput (uint3 id : SV_DispatchThreadID)
         Node node;
         node.time = _time;
         node.pos = particle.pos;
+        node.alpha = particle.hash >= _invisibleHash ? 0.0 : 1.0;
 
         // バッファをあふれたIdは先頭にもどす
         currentNodeIdx++;

@@ -57,6 +57,7 @@ Shader "Custom/TrailsShader"
                 Node node1 = GetNode(instanceId, id); // 今見ているノード
                 Node node2 = GetNode(instanceId, id+1);
                 Node node3 = GetNode(instanceId, id+2);
+                Node node4 = GetNode(instanceId, id+3);
 
                 bool isLatestNode = (currentNodeIdx == (int)id);
 
@@ -81,8 +82,8 @@ Shader "Custom/TrailsShader"
                 // 色の計算
                 float ageRate = saturate((_time - node1.time) / _life);
                 float ageRateNext = saturate((_time - node2.time) / _life);
-                o.col = lerp(_startColor, _endColor, ageRate);
-                o.colNext = lerp(_startColor, _endColor, ageRateNext);
+                o.col = lerp(_startColor, _endColor, ageRate) * node1.alpha;
+                o.colNext = lerp(_startColor, _endColor, ageRateNext) * node1.alpha;
 
                 return o;
             }

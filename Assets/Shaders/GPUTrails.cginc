@@ -24,6 +24,7 @@ struct Node
 {
 	float time;
     float3 pos;
+	float alpha;
 };
 
 

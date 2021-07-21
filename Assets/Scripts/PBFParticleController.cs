@@ -426,6 +426,7 @@ namespace Losk.Trail
 
         /// <summary>
         /// ハッシュを計算し、ハッシュをもとにソートし、セルのStart/Endインデックスを格納
+        /// hash == Maxは非表示パーティクル
         /// </summary>
         void ComputeHash()
         {

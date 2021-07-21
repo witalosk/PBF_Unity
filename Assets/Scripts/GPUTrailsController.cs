@@ -27,6 +27,7 @@ namespace Losk.Trail
         {
             public float time; //更新時間
             public Vector3 pos;
+            public float alpha;
         }
 
 
@@ -80,6 +81,7 @@ namespace Losk.Trail
             _trailsComputeShader.SetFloat(CS_NAMES.UPDATE_DISTANCE_MIN, _updateDistanceMin);
             _trailsComputeShader.SetInt(CS_NAMES.PARTICLE_NUM, particleNum);
             _trailsComputeShader.SetInt(CS_NAMES.NODE_NUM_PER_TRAIL, _nodeNumPerTrail);
+            _trailsComputeShader.SetInt(CS_NAMES.INVISIBLE_HASH, _particleController._nnSearchDivNum.x * _particleController._nnSearchDivNum.y * _particleController._nnSearchDivNum.z);
             _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.TRAIL_BUFFER, _trailBuffer);
             _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.NODE_BUFFER, _nodeBuffer);
             _trailsComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_BUFFER, _particleController._particleBuffer.Current);
