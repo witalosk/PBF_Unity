@@ -29,8 +29,8 @@ namespace Losk.Trail
     /// </summary>
     public struct CellStartEnd
     {
-        public int startIdx;
-        public int endIdx;
+        public uint startIdx;
+        public uint endIdx;
     }
 
     /// <summary>
@@ -95,12 +95,8 @@ namespace Losk.Trail
         public float _ap_k = 0.1f;                  // 人工圧力係数k
         public float _ap_n = 4.0f;                  // 人工圧力係数n
         public float _ap_q = 0.2f;                  // 人工圧力係数q
-        
-        /// <summary>
-        /// 近傍探索用グリッドの分割数
-        /// </summary>
-        public Vector3Int _nnSearchDivNum = new Vector3Int(10, 10, 10);
 
+        public Vector3Int NnSearchDivNum { get; private set; }  = new(10, 10, 10);
 
         [SerializeField, Header("References")]
         FluidSource _fluidSource;                   // 流体源, TODO: 複数対応
@@ -110,16 +106,11 @@ namespace Losk.Trail
 
         [SerializeField]
         List<FluidCollider> _fluidColliderList;     // 障害物リスト
-
-
-        /// <summary>
-        /// groupの数
-        /// </summary>
-        /// <returns></returns>
-        private Vector3Int _groupNum = new Vector3Int(1, 1, 1);
-
+        
+        private Vector3Int _groupNum = new(1, 1, 1);
+        
+        private Vector3 _spaceSize;
         private const int THREAD_NUM_X = 256;
-
         
         /// <summary>
         /// 初期化処理
@@ -135,6 +126,11 @@ namespace Losk.Trail
             _effectiveRadius = Mathf.Pow((3.0f * _volume) / (4.0f * Mathf.PI), 1f / 3f); // 球の体積から有効半径を計算
             _particleRadius = Mathf.Pow((Mathf.PI / (6.0f * _kernelParticles)), 1f / 3f) * _effectiveRadius;
 
+            // グリッドの1辺 == effectiveRadiusになるようにする
+            _spaceSize = _spaceMax - _spaceMin;
+            NnSearchDivNum = new Vector3Int(Mathf.CeilToInt(_spaceSize.x / _effectiveRadius), Mathf.CeilToInt(_spaceSize.y / _effectiveRadius), Mathf.CeilToInt(_spaceSize.z / _effectiveRadius));
+            Debug.Log(NnSearchDivNum);
+            
             // グループ数計算
             _groupNum.x = Mathf.CeilToInt(_particleNum / THREAD_NUM_X) + 1;
 
@@ -152,7 +148,7 @@ namespace Losk.Trail
             // バッファの初期化
             _particleBuffer = new SwapBuffer(_particleNum, Marshal.SizeOf(typeof(Particle)));
             _deltaDensBuffer = new ComputeBuffer(_particleNum, sizeof(float));
-            _cellStartEndBuffer = new ComputeBuffer(_nnSearchDivNum.x * _nnSearchDivNum.y * _nnSearchDivNum.z, Marshal.SizeOf(typeof(CellStartEnd)));
+            _cellStartEndBuffer = new ComputeBuffer(NnSearchDivNum.x * NnSearchDivNum.y * NnSearchDivNum.z, Marshal.SizeOf(typeof(CellStartEnd)));
             _particleIdBuffer = new ComputeBuffer(_particleNum, sizeof(int));
             _fluidColliderDataBuffer = new ComputeBuffer(_fluidColliderList.Count, Marshal.SizeOf(typeof(FluidColliderData)));
 
@@ -234,7 +230,7 @@ namespace Losk.Trail
             _particleComputeShader.SetVector(CS_NAMES.MOUSE_POS, new Vector4(-1000.0f, -1000.0f, -1000.0f, 0f));
             _particleComputeShader.SetInt(CS_NAMES.FLUID_COLLIDER_NUM, _fluidColliderList.Count);
 
-            _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, new int[]{_nnSearchDivNum.x, _nnSearchDivNum.y, _nnSearchDivNum.z});
+            _particleComputeShader.SetInts(CS_NAMES.NNSEARCH_DIM, NnSearchDivNum.x, NnSearchDivNum.y, NnSearchDivNum.z);
         }
 
         /// <summary>
@@ -288,7 +284,7 @@ namespace Losk.Trail
             UpdateVelocity();
         }
 
-        void OnDestroy()
+        private void OnDestroy()
         {
             _particleBuffer.Release();
             _deltaDensBuffer.Release();
@@ -304,7 +300,7 @@ namespace Losk.Trail
         /// <param name="h"></param>
         /// <param name="a"></param>
         /// <returns></returns>
-        float KernelPoly6(float r, float h, float a)
+        private float KernelPoly6(float r, float h, float a)
         {
             if(r >= 0.0 && r <= h){
                 float q = h*h-r*r;
@@ -318,7 +314,7 @@ namespace Losk.Trail
         /// <summary>
         /// パーティクルの流入と流出の処理
         /// </summary>
-        void ComputeSourceAndDestination()
+        private void ComputeSourceAndDestination()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_SOURCE_AND_DESTINATION);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -330,7 +326,7 @@ namespace Losk.Trail
         /// <summary>
         /// 密度計算
         /// </summary>
-        void ComputeDensity()
+        private void ComputeDensity()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_DENSITY_KERNEL);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -343,7 +339,7 @@ namespace Losk.Trail
         /// <summary>
         /// パーティクルにかかる力の計算(外力項)
         /// </summary>
-        void ComputeExternalForces()
+        private void ComputeExternalForces()
         {
             // マウスとのインタラクション
             if (Input.GetMouseButton(0)) {
@@ -366,7 +362,7 @@ namespace Losk.Trail
         /// <summary>
         /// 予測位置・速度の計算
         /// </summary>
-        void Integrate()
+        private void Integrate()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.INTEGRATE_KERNEL);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -379,7 +375,7 @@ namespace Losk.Trail
         /// <summary>
         /// スケーリングファクタの計算
         /// </summary>
-        void ComputeScalingFactor()
+        private void ComputeScalingFactor()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_SCALING_FACTOR);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -392,7 +388,7 @@ namespace Losk.Trail
         /// <summary>
         /// 位置修正量の計算
         /// </summary>
-        void ComputePositionCorrection()
+        private void ComputePositionCorrection()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_POSITION_CORRECTION);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -405,7 +401,7 @@ namespace Losk.Trail
         /// <summary>
         /// 位置修正を適用
         /// </summary>
-        void ApplyPositionCorrection()
+        private void ApplyPositionCorrection()
         {
             int kernelIdx_pc = _particleComputeShader.FindKernel(CS_NAMES.POSITION_CORRECTION);
             _particleComputeShader.SetBuffer(kernelIdx_pc, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -418,7 +414,7 @@ namespace Losk.Trail
         /// 平均密度変動率を計算
         /// </summary>
         /// <returns></returns>
-        float ComputeDensityFluctuation()
+        private float ComputeDensityFluctuation()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_DENSITY_FLUCTUATION);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -438,7 +434,7 @@ namespace Losk.Trail
         /// <summary>
         /// 速度を更新
         /// </summary>
-        void UpdateVelocity()
+        private void UpdateVelocity()
         {
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.UPDATE_VELOCITY);
             _particleComputeShader.SetBuffer(kernelIdx, CS_NAMES.PARTICLE_READ_BUFFER, _particleBuffer.Current);
@@ -451,7 +447,7 @@ namespace Losk.Trail
         /// ハッシュを計算し、ハッシュをもとにソートし、セルのStart/Endインデックスを格納
         /// hash == Maxは非表示パーティクル
         /// </summary>
-        void ComputeHash()
+        private void ComputeHash()
         {
             // ハッシュを計算
             int kernelIdx = _particleComputeShader.FindKernel(CS_NAMES.COMPUTE_HASH_KERNEL);
@@ -490,7 +486,7 @@ namespace Losk.Trail
             _particleComputeShader.Dispatch(kernelIdx, _groupNum.x, _groupNum.y, _groupNum.z);
         }
 
-            void OnDrawGizmos()
+            private void OnDrawGizmos()
             {
                 Gizmos.color = Color.cyan;
                 Gizmos.DrawWireCube((_spaceMin + _spaceMax) * 0.5f, (_spaceMax - _spaceMin));
