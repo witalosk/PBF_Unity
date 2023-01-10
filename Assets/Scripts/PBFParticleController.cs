@@ -45,7 +45,7 @@ namespace Losk.Trail
     /// <summary>
     /// パーティクル(Emitter)を動かすコントローラ
     /// </summary>
-    public class PBFParticleController : MonoBehaviour, BeUpdatedInterface
+    public class PBFParticleController : MonoBehaviour, ILocalUpdate
     {
         /// <summary>
         /// パーティクル用コンピュートシェーダ

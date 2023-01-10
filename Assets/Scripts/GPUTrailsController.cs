@@ -10,7 +10,7 @@ namespace Losk.Trail
     /// <summary>
     /// GPUTrail本体
     /// </summary>
-    public class GPUTrailsController : MonoBehaviour, BeUpdatedInterface
+    public class GPUTrailsController : MonoBehaviour, ILocalUpdate
     {
         /// <summary>
         /// Trail

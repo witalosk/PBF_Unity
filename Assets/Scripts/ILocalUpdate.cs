@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Losk.Trail
 {
-    interface BeUpdatedInterface
+    interface ILocalUpdate
     {
         /// <summary>
         /// それぞれのオブジェクト個別のUpdate関数
